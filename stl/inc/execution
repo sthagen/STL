@@ -241,7 +241,7 @@ constexpr size_t _Get_least2_chunked_work_chunk_count(const size_t _Hw_threads, 
     // get the number of chunks to break work into to parallelize, assuming chunks must be of size 2
     const auto _Size_count = static_cast<size_t>(_Count); // no overflow due to forward iterators
     // we assume _Hw_threads * _Oversubscription_multiplier does not overflow
-    return _Get_chunked_work_chunk_count(_Hw_threads, _Size_count >> 1);
+    return _Get_chunked_work_chunk_count(_Hw_threads, _Size_count / 2);
 }
 
 // STRUCT TEMPLATE _Parallelism_allocator
@@ -423,7 +423,7 @@ struct _Parallel_choose_min_chunk {
             }
         }
 
-        lock_guard<mutex> _Lck(_Mtx); // TRANSITION, VSO#671180
+        lock_guard<mutex> _Lck(_Mtx); // TRANSITION, VSO-671180
         if (_Selected_chunk.load(memory_order_relaxed) == _Chunk) {
             _Result = _Local_result;
         }
@@ -458,7 +458,7 @@ struct _Parallel_choose_max_chunk {
             }
         }
 
-        lock_guard<mutex> _Lck(_Mtx); // TRANSITION, VSO#671180
+        lock_guard<mutex> _Lck(_Mtx); // TRANSITION, VSO-671180
         if (_Selected_chunk.load(memory_order_relaxed) == _Chunk) {
             _Result = _Local_result;
         }
@@ -566,7 +566,7 @@ public:
             auto _New_segment = _Segment->_Grow(_Local_b, _Local_t);
             _Circular_buffer<_Ty>* _Detached_segment;
             {
-                lock_guard<mutex> _Lck(_Segment_lock); // TRANSITION, VSO#671180
+                lock_guard<mutex> _Lck(_Segment_lock); // TRANSITION, VSO-671180
                 _Detached_segment = _STD exchange(_Segment, _New_segment);
             } // unlock
 
@@ -591,7 +591,7 @@ public:
 
             _Circular_buffer<_Ty>* _Stealing_segment;
             {
-                lock_guard<mutex> _Lck(_Segment_lock); // TRANSITION, VSO#671180
+                lock_guard<mutex> _Lck(_Segment_lock); // TRANSITION, VSO-671180
                 _Stealing_segment = _Segment;
                 _MT_INCR(_Stealing_segment->_Ref_count);
             }
@@ -730,7 +730,7 @@ struct _Work_stealing_team { // inter-thread communication for threads working o
     _Work_stealing_membership<_Ty> _Join_team() noexcept {
         size_t _Id;
         {
-            lock_guard<mutex> _Lck(_Available_mutex); // TRANSITION, VSO#671180
+            lock_guard<mutex> _Lck(_Available_mutex); // TRANSITION, VSO-671180
             _Id = _Available_queues.top();
             _Available_queues.pop();
         } // unlock
@@ -744,7 +744,7 @@ struct _Work_stealing_team { // inter-thread communication for threads working o
     }
 
     void _Leave_team(size_t _Id) noexcept {
-        lock_guard<mutex> _Lck(_Available_mutex); // TRANSITION, VSO#671180
+        lock_guard<mutex> _Lck(_Available_mutex); // TRANSITION, VSO-671180
         _Available_queues.push(_Id);
     }
 
@@ -1006,16 +1006,16 @@ template <class _InIt1, class _InIt2>
 _Common_diff_t<_InIt1, _InIt2> _Distance_any(_InIt1 _First1, _InIt1 _Last1, _InIt2 _First2,
     _InIt2 _Last2) { // get the distance from 2 ranges which should have identical lengths
     if constexpr (_Is_random_iter_v<_InIt1>) {
-        (void) _First2; // TRANSITION, VSO#486357
-        (void) _Last2; // TRANSITION, VSO#486357
+        (void) _First2; // TRANSITION, VSO-486357
+        (void) _Last2; // TRANSITION, VSO-486357
         return _Last1 - _First1;
     } else if constexpr (_Is_random_iter_v<_InIt2>) {
-        (void) _First1; // TRANSITION, VSO#486357
-        (void) _Last1; // TRANSITION, VSO#486357
+        (void) _First1; // TRANSITION, VSO-486357
+        (void) _Last1; // TRANSITION, VSO-486357
         return _Last2 - _First2;
     } else {
-        (void) _First2; // TRANSITION, VSO#486357
-        (void) _Last2; // TRANSITION, VSO#486357
+        (void) _First2; // TRANSITION, VSO-486357
+        (void) _Last2; // TRANSITION, VSO-486357
         return _STD distance(_First1, _Last1);
     }
 }
@@ -2679,7 +2679,7 @@ bool _Process_sort_work_item(const _RanIt _Basis, _Pr _Pred, _Sort_work_item<_Ra
 
     if (0 < _Ideal) { // divide and conquer by partitioning (quicksort)
         const auto _Mid       = _Partition_by_median_guess_unchecked(_First, _Last, _Pred);
-        const auto _New_ideal = static_cast<_Diff>((_Ideal >> 1) + (_Ideal >> 2)); // allow 1.5 log2(N) divisions
+        const auto _New_ideal = static_cast<_Diff>(_Ideal / 2 + _Ideal / 4); // allow 1.5 log2(N) divisions
         _Wi._Size             = _Mid.first - _First;
         _Wi._Ideal            = _New_ideal;
         _Right_fork_wi        = {_Mid.second - _Basis, _Last - _Mid.second, _New_ideal};
@@ -3026,12 +3026,11 @@ void stable_sort(_ExPo&&, const _BidIt _First, const _BidIt _Last, _Pr _Pred) no
         _Hw_threads          = __std_parallel_algorithms_hw_threads();
         _Attempt_parallelism = _Hw_threads > 1;
     } else {
-        (void) _Hw_threads; // TRANSITION, VSO#486357
+        (void) _Hw_threads; // TRANSITION, VSO-486357
         _Attempt_parallelism = false;
     }
 
-    _Optimistic_temporary_buffer<_Iter_value_t<_BidIt>> _Temp_buf{
-        _Attempt_parallelism ? _Count : _Count - (_Count >> 1)};
+    _Optimistic_temporary_buffer<_Iter_value_t<_BidIt>> _Temp_buf{_Attempt_parallelism ? _Count : _Count - _Count / 2};
     if constexpr (remove_reference_t<_ExPo>::_Parallelize) {
         if (_Attempt_parallelism) {
             // forward+ iterator overflow assumption for size_t cast
@@ -3283,7 +3282,7 @@ _NODISCARD bool is_partitioned(_ExPo&&, const _FwdIt _First, const _FwdIt _Last,
 template <class _RanIt, class _Pr>
 struct _Static_partitioned_is_heap_until {
     using _Diff = _Iter_diff_t<_RanIt>;
-    _Static_partition_team<_Iter_diff_t<_RanIt>> _Team;
+    _Static_partition_team<_Diff> _Team;
     _RanIt _Range_first;
     _Pr _Pred;
     _Parallel_find_results<_RanIt> _Results;
@@ -4055,7 +4054,7 @@ template <class _InIt, class _Ty, class _BinOp>
 _Ty _Reduce_move_unchecked(_InIt _First, const _InIt _Last, _Ty _Val, _BinOp _Reduce_op) {
     // return reduction, choose optimization
     if constexpr (_Plus_on_arithmetic_ranges_reduction_v<_Unwrapped_t<_InIt>, _Ty, _BinOp>) {
-        (void) _Reduce_op; // TRANSITION, VSO#486357
+        (void) _Reduce_op; // TRANSITION, VSO-486357
         return _Reduce_plus_arithmetic_ranges(_First, _Last, _Val);
     } else {
         for (; _First != _Last; ++_First) {
@@ -4071,7 +4070,7 @@ _Ty _Reduce_at_least_two(const _FwdIt _First, const _FwdIt _Last, _BinOp _Reduce
     // return reduction with no initial value
     // pre: distance(_First, _Last) >= 2
     if constexpr (_Plus_on_arithmetic_ranges_reduction_v<_FwdIt, _Ty, _BinOp>) {
-        (void) _Reduce_op; // TRANSITION, VSO#486357
+        (void) _Reduce_op; // TRANSITION, VSO-486357
         return _Reduce_plus_arithmetic_ranges(_First, _Last, _Ty{0});
     } else {
         auto _Next = _First;

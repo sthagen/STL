@@ -1676,7 +1676,7 @@ _NODISCARD errc _Convert_hexadecimal_string_to_floating_type(
 
 // C11 6.4.4.2 "Floating constants" (without floating-suffix, hexadecimal-prefix)
 // amended by C11 7.22.1.3 "The strtod, strtof, and strtold functions" making exponents optional
-// LWG 3080: "the sign '+' may only appear in the exponent part"
+// LWG-3080: "the sign '+' may only appear in the exponent part"
 
 // digit-sequence:
 //     digit
@@ -2514,7 +2514,7 @@ template <typename UInt, typename Pred>
     assert(first <= last);
 
     for (UInt n = last - first; n > 0;) {
-        const UInt n2  = n >> 1;
+        const UInt n2  = n / 2;
         const UInt mid = first + n2;
 
         if (pred(mid)) {

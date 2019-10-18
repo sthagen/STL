@@ -44,6 +44,7 @@
 //     (partially implemented)
 // P0898R3 Standard Library Concepts
 // P0919R3 Heterogeneous Lookup For Unordered Containers
+// P0966R1 string::reserve() Should Not Shrink
 // P1227R2 Signed std::ssize(), Unsigned span::size()
 //     (partially implemented)
 // P1357R1 is_bounded_array, is_unbounded_array
@@ -104,9 +105,9 @@
 // P0004R1 Removing Deprecated Iostreams Aliases
 // P0298R3 std::byte
 // P0302R1 Removing Allocator Support In std::function
-// LWG 2385 function::assign allocator argument doesn't make sense
-// LWG 2921 packaged_task and type-erased allocators
-// LWG 2976 Dangling uses_allocator specialization for packaged_task
+// LWG-2385 function::assign allocator argument doesn't make sense
+// LWG-2921 packaged_task and type-erased allocators
+// LWG-2976 Dangling uses_allocator specialization for packaged_task
 // The non-Standard std::tr1 namespace and TR1-only machinery
 // Enforcement of matching allocator value_types
 
@@ -412,7 +413,7 @@
 
 #define _CPPLIB_VER 650
 #define _MSVC_STL_VERSION 142
-#define _MSVC_STL_UPDATE 201909L
+#define _MSVC_STL_UPDATE 201910L
 
 #ifndef _ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
 #ifdef __EDG__
@@ -473,9 +474,9 @@
 #endif // _HAS_STD_BYTE
 
 // P0302R1 Removing Allocator Support In std::function
-// LWG 2385 function::assign allocator argument doesn't make sense
-// LWG 2921 packaged_task and type-erased allocators
-// LWG 2976 Dangling uses_allocator specialization for packaged_task
+// LWG-2385 function::assign allocator argument doesn't make sense
+// LWG-2921 packaged_task and type-erased allocators
+// LWG-2976 Dangling uses_allocator specialization for packaged_task
 #ifndef _HAS_FUNCTION_ALLOCATOR_SUPPORT
 #define _HAS_FUNCTION_ALLOCATOR_SUPPORT (!_HAS_CXX17)
 #endif // _HAS_FUNCTION_ALLOCATOR_SUPPORT
@@ -799,7 +800,21 @@
 #define _DEPRECATE_STDEXT_HASH_UPPER_BOUND
 #endif // ^^^ warning disabled ^^^
 
-// next warning number: STL4024
+// P0966R1 [depr.string.capacity]
+#if _HAS_CXX20 && !defined(_SILENCE_CXX20_STRING_RESERVE_WITHOUT_ARGUMENT_DEPRECATION_WARNING) \
+    && !defined(_SILENCE_ALL_CXX20_DEPRECATION_WARNINGS)
+#define _CXX20_DEPRECATE_STRING_RESERVE_WITHOUT_ARGUMENT                                                             \
+    [[deprecated("warning STL4024: "                                                                                 \
+                 "std::string::reserve() without an argument is deprecated in C++20. "                               \
+                 "To shrink the string's capacity, use std::string::shrink_to_fit() instead. Otherwise, provide an " \
+                 "argument to std::string::reserve(). "                                                              \
+                 "You can define _SILENCE_CXX20_STRING_RESERVE_WITHOUT_ARGUMENT_DEPRECATION_WARNING "                \
+                 "or _SILENCE_ALL_CXX20_DEPRECATION_WARNINGS to acknowledge that you have received this warning.")]]
+#else // ^^^ warning enabled / warning disabled vvv
+#define _CXX20_DEPRECATE_STRING_RESERVE_WITHOUT_ARGUMENT
+#endif // ^^^ warning disabled ^^^
+
+// next warning number: STL4025
 
 
 // LIBRARY FEATURE-TEST MACROS
