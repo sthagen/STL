@@ -32,6 +32,7 @@
 // P0487R1 Fixing operator>>(basic_istream&, CharT*)
 // P0550R2 remove_cvref
 // P0616R0 Using move() In <numeric>
+// P0631R8 <numbers> Math Constants
 // P0646R1 list/forward_list remove()/remove_if()/unique() Return size_type
 // P0653R2 to_address()
 // P0655R1 visit<R>()
@@ -149,6 +150,7 @@
 // P0063R3 C11 Standard Library
 // P0074R0 owner_less<>
 // P0092R1 <chrono> floor(), ceil(), round(), abs()
+// P0340R3 SFINAE-Friendly underlying_type
 // P0414R2 shared_ptr<T[]>, shared_ptr<T[N]>
 // P0418R2 atomic compare_exchange memory_order Requirements
 // P0435R1 Overhauling common_type
@@ -159,6 +161,7 @@
 // P0548R1 Tweaking common_type And duration
 // P0558R1 Resolving atomic<T> Named Base Class Inconsistencies
 // P0599R1 noexcept hash
+// P0738R2 istream_iterator Cleanup
 // P0771R1 noexcept For std::function's Move Constructor
 // P0777R1 Avoiding Unnecessary decay
 // P0809R0 Comparing Unordered Containers
@@ -416,9 +419,9 @@
 #endif // __clang__
 #endif // _STL_RESTORE_DEPRECATED_WARNING
 
-#define _CPPLIB_VER 650
+#define _CPPLIB_VER       650
 #define _MSVC_STL_VERSION 142
-#define _MSVC_STL_UPDATE 201911L
+#define _MSVC_STL_UPDATE  201911L
 
 #ifndef _ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
 #ifdef __EDG__
@@ -853,102 +856,102 @@
 // LIBRARY FEATURE-TEST MACROS
 
 // C++14
-#define __cpp_lib_chrono_udls 201304L
-#define __cpp_lib_complex_udls 201309L
-#define __cpp_lib_exchange_function 201304L
-#define __cpp_lib_generic_associative_lookup 201304L
-#define __cpp_lib_integer_sequence 201304L
-#define __cpp_lib_integral_constant_callable 201304L
-#define __cpp_lib_is_final 201402L
-#define __cpp_lib_is_null_pointer 201309L
-#define __cpp_lib_make_reverse_iterator 201402L
-#define __cpp_lib_make_unique 201304L
-#define __cpp_lib_null_iterators 201304L
-#define __cpp_lib_quoted_string_io 201304L
-#define __cpp_lib_result_of_sfinae 201210L
+#define __cpp_lib_chrono_udls                 201304L
+#define __cpp_lib_complex_udls                201309L
+#define __cpp_lib_exchange_function           201304L
+#define __cpp_lib_generic_associative_lookup  201304L
+#define __cpp_lib_integer_sequence            201304L
+#define __cpp_lib_integral_constant_callable  201304L
+#define __cpp_lib_is_final                    201402L
+#define __cpp_lib_is_null_pointer             201309L
+#define __cpp_lib_make_reverse_iterator       201402L
+#define __cpp_lib_make_unique                 201304L
+#define __cpp_lib_null_iterators              201304L
+#define __cpp_lib_quoted_string_io            201304L
+#define __cpp_lib_result_of_sfinae            201210L
 #define __cpp_lib_robust_nonmodifying_seq_ops 201304L
 #ifndef _M_CEE
 #define __cpp_lib_shared_timed_mutex 201402L
 #endif // _M_CEE
-#define __cpp_lib_string_udls 201304L
+#define __cpp_lib_string_udls                  201304L
 #define __cpp_lib_transformation_trait_aliases 201304L
-#define __cpp_lib_tuple_element_t 201402L
-#define __cpp_lib_tuples_by_type 201304L
+#define __cpp_lib_tuple_element_t              201402L
+#define __cpp_lib_tuples_by_type               201304L
 
 // C++17
-#define __cpp_lib_addressof_constexpr 201603L
+#define __cpp_lib_addressof_constexpr              201603L
 #define __cpp_lib_allocator_traits_is_always_equal 201411L
-#define __cpp_lib_as_const 201510L
-#define __cpp_lib_bool_constant 201505L
-#define __cpp_lib_enable_shared_from_this 201603L
-#define __cpp_lib_incomplete_container_elements 201505L
-#define __cpp_lib_invoke 201411L
-#define __cpp_lib_logical_traits 201510L
-#define __cpp_lib_map_try_emplace 201411L
-#define __cpp_lib_nonmember_container_access 201411L
+#define __cpp_lib_as_const                         201510L
+#define __cpp_lib_bool_constant                    201505L
+#define __cpp_lib_enable_shared_from_this          201603L
+#define __cpp_lib_incomplete_container_elements    201505L
+#define __cpp_lib_invoke                           201411L
+#define __cpp_lib_logical_traits                   201510L
+#define __cpp_lib_map_try_emplace                  201411L
+#define __cpp_lib_nonmember_container_access       201411L
 #ifndef _USING_V110_SDK71_
 #define __cpp_lib_shared_mutex 201505L
 #endif // _USING_V110_SDK71_
-#define __cpp_lib_shared_ptr_arrays 201611L
-#define __cpp_lib_transparent_operators 201510L
+#define __cpp_lib_shared_ptr_arrays             201611L
+#define __cpp_lib_transparent_operators         201510L
 #define __cpp_lib_type_trait_variable_templates 201510L
-#define __cpp_lib_uncaught_exceptions 201411L
-#define __cpp_lib_unordered_map_try_emplace 201411L
-#define __cpp_lib_void_t 201411L
+#define __cpp_lib_uncaught_exceptions           201411L
+#define __cpp_lib_unordered_map_try_emplace     201411L
+#define __cpp_lib_void_t                        201411L
 
 #if _HAS_CXX17
-#define __cpp_lib_any 201606L
-#define __cpp_lib_apply 201603L
-#define __cpp_lib_array_constexpr 201603L
+#define __cpp_lib_any                        201606L
+#define __cpp_lib_apply                      201603L
+#define __cpp_lib_array_constexpr            201603L
 #define __cpp_lib_atomic_is_always_lock_free 201603L
-#define __cpp_lib_boyer_moore_searcher 201603L
+#define __cpp_lib_boyer_moore_searcher       201603L
 #if _HAS_STD_BYTE
 #define __cpp_lib_byte 201603L
 #endif // _HAS_STD_BYTE
 #define __cpp_lib_chrono 201611L
-#define __cpp_lib_clamp 201603L
+#define __cpp_lib_clamp  201603L
 #ifndef _M_CEE
 #define __cpp_lib_execution 201603L
 #endif // _M_CEE
-#define __cpp_lib_filesystem 201703L
-#define __cpp_lib_gcd_lcm 201606L
-#define __cpp_lib_hardware_interference_size 201703L
+#define __cpp_lib_filesystem                        201703L
+#define __cpp_lib_gcd_lcm                           201606L
+#define __cpp_lib_hardware_interference_size        201703L
 #define __cpp_lib_has_unique_object_representations 201606L
-#define __cpp_lib_hypot 201603L
-#define __cpp_lib_is_aggregate 201703L
-#define __cpp_lib_is_invocable 201703L
-#define __cpp_lib_is_swappable 201603L
-#define __cpp_lib_launder 201606L
-#define __cpp_lib_make_from_tuple 201606L
-#define __cpp_lib_math_special_functions 201603L
-#define __cpp_lib_memory_resource 201603L
-#define __cpp_lib_node_extract 201606L
-#define __cpp_lib_not_fn 201603L
-#define __cpp_lib_optional 201606L
+#define __cpp_lib_hypot                             201603L
+#define __cpp_lib_is_aggregate                      201703L
+#define __cpp_lib_is_invocable                      201703L
+#define __cpp_lib_is_swappable                      201603L
+#define __cpp_lib_launder                           201606L
+#define __cpp_lib_make_from_tuple                   201606L
+#define __cpp_lib_math_special_functions            201603L
+#define __cpp_lib_memory_resource                   201603L
+#define __cpp_lib_node_extract                      201606L
+#define __cpp_lib_not_fn                            201603L
+#define __cpp_lib_optional                          201606L
 #ifndef _M_CEE
 #define __cpp_lib_parallel_algorithm 201603L
 #endif // _M_CEE
 #define __cpp_lib_raw_memory_algorithms 201606L
-#define __cpp_lib_sample 201603L
-#define __cpp_lib_scoped_lock 201703L
-#define __cpp_lib_shared_ptr_weak_type 201606L
-#define __cpp_lib_string_view 201606L
-#define __cpp_lib_to_chars 201611L
-#define __cpp_lib_variant 201606L
+#define __cpp_lib_sample                201603L
+#define __cpp_lib_scoped_lock           201703L
+#define __cpp_lib_shared_ptr_weak_type  201606L
+#define __cpp_lib_string_view           201606L
+#define __cpp_lib_to_chars              201611L
+#define __cpp_lib_variant               201606L
 #else // _HAS_CXX17
 #define __cpp_lib_chrono 201510L
 #endif // _HAS_CXX17
 
 // C++20
 #if _HAS_CXX20
-#define __cpp_lib_bind_front 201907L
+#define __cpp_lib_bind_front           201907L
 #define __cpp_lib_bounded_array_traits 201902L
 #ifdef __cpp_char8_t
 #define __cpp_lib_char8_t 201811L
 #endif // __cpp_char8_t
 
 #if defined(__cpp_concepts) && __cpp_concepts > 201507L
-#define __cpp_lib_concepts 201806L
+#define __cpp_lib_concepts 201907L
 
 // "Detect" P1084's exact-type-and-value-category semantics for trailing-return-types in compound requirements
 #ifndef _HAS_EXACT_COMPOUND_REQUIREMENT
@@ -965,14 +968,15 @@
 #endif // _HAS_STD_BOOLEAN
 #endif // defined(__cpp_concepts) && __cpp_concepts > 201507L
 
-#define __cpp_lib_erase_if 201811L
+#define __cpp_lib_erase_if                 201811L
 #define __cpp_lib_generic_unordered_lookup 201811L
-#define __cpp_lib_list_remove_return_type 201806L
-#define __cpp_lib_to_array 201907L
+#define __cpp_lib_list_remove_return_type  201806L
+#define __cpp_lib_math_constants           201907L
+#define __cpp_lib_to_array                 201907L
 #endif // _HAS_CXX20
 
 // EXPERIMENTAL
-#define __cpp_lib_experimental_erase_if 201411L
+#define __cpp_lib_experimental_erase_if   201411L
 #define __cpp_lib_experimental_filesystem 201406L
 
 
@@ -991,24 +995,24 @@ compiler option, or define _ALLOW_RTCc_IN_STL to acknowledge that you have recei
 #endif // ^^^ non-Clang ^^^
 #endif // _DECLSPEC_ALLOCATOR
 
-#define _STRINGIZEX(x) #x
-#define _STRINGIZE(x) _STRINGIZEX(x)
+#define _STRINGIZEX(x)  #x
+#define _STRINGIZE(x)   _STRINGIZEX(x)
 #define _EMPTY_ARGUMENT // for empty macro argument
 
 // NAMESPACE
 #define _STD_BEGIN namespace std {
-#define _STD_END }
-#define _STD ::std::
+#define _STD_END   }
+#define _STD       ::std::
 
 // We use the stdext (standard extension) namespace to contain extensions that are not part of the current standard
 #define _STDEXT_BEGIN namespace stdext {
-#define _STDEXT_END }
-#define _STDEXT ::stdext::
+#define _STDEXT_END   }
+#define _STDEXT       ::stdext::
 
 #ifdef __cplusplus
 #define _CSTD ::
 
-#define _EXTERN_C extern "C" {
+#define _EXTERN_C     extern "C" {
 #define _END_EXTERN_C }
 #else // ^^^ __cplusplus / !__cplusplus vvv
 #define _CSTD
@@ -1022,9 +1026,9 @@ compiler option, or define _ALLOW_RTCc_IN_STL to acknowledge that you have recei
 #define _END_EXTERN_C_UNLESS_PURE
 #define _STATIC_UNLESS_PURE // Avoid warning C4640: construction of local static object is not thread-safe (/Wall)
 #else // ^^^ _M_CEE_PURE / !_M_CEE_PURE vvv
-#define _EXTERN_C_UNLESS_PURE _EXTERN_C
+#define _EXTERN_C_UNLESS_PURE     _EXTERN_C
 #define _END_EXTERN_C_UNLESS_PURE _END_EXTERN_C
-#define _STATIC_UNLESS_PURE static
+#define _STATIC_UNLESS_PURE       static
 #endif // _M_CEE_PURE
 
 #if defined(MRTDLL) && !defined(_CRTBLD)
