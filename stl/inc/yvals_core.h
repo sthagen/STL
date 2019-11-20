@@ -31,6 +31,9 @@
 //     (mbrtoc8 and c8rtomb not yet implemented)
 // P0487R1 Fixing operator>>(basic_istream&, CharT*)
 // P0550R2 remove_cvref
+// P0553R4 <bit> Rotating And Counting Functions
+// P0556R3 <bit> ispow2(), ceil2(), floor2(), log2p1()
+//            (log2p1() is called bit_length() as of D1956)
 // P0616R0 Using move() In <numeric>
 // P0631R8 <numbers> Math Constants
 // P0646R1 list/forward_list remove()/remove_if()/unique() Return size_type
@@ -52,6 +55,7 @@
 // P1227R2 Signed std::ssize(), Unsigned span::size()
 //     (partially implemented)
 // P1357R1 is_bounded_array, is_unbounded_array
+// P1612R1 Relocating endian To <bit>
 // P1651R0 bind_front() Should Not Unwrap reference_wrapper
 // P1754R1 Rename Concepts To standard_case
 // P????R? directory_entry::clear_cache()
@@ -944,7 +948,13 @@
 
 // C++20
 #if _HAS_CXX20
-#define __cpp_lib_bind_front           201907L
+#define __cpp_lib_bind_front 201907L
+#if defined(__clang__) || defined(__EDG__)
+#define __cpp_lib_bitops 201907L
+#else // ^^^ Clang and EDG / MSVC vvv
+// a future MSVC update will embed CPU feature detection into <bit> intrinsics
+// TRANSITION, VSO-1020212
+#endif // defined(__clang__) || defined(__EDG__)
 #define __cpp_lib_bounded_array_traits 201902L
 #ifdef __cpp_char8_t
 #define __cpp_lib_char8_t 201811L
@@ -959,6 +969,7 @@
 #endif // _HAS_STD_BOOLEAN
 #endif // defined(__cpp_concepts) && __cpp_concepts > 201507L
 
+#define __cpp_lib_endian                   201907L
 #define __cpp_lib_erase_if                 201811L
 #define __cpp_lib_generic_unordered_lookup 201811L
 #define __cpp_lib_list_remove_return_type  201806L
