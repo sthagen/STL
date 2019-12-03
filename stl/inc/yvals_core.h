@@ -57,6 +57,7 @@
 // P1357R1 is_bounded_array, is_unbounded_array
 // P1612R1 Relocating endian To <bit>
 // P1651R0 bind_front() Should Not Unwrap reference_wrapper
+// P1690R1 Refining Heterogeneous Lookup For Unordered Containers
 // P1754R1 Rename Concepts To standard_case
 // P????R? directory_entry::clear_cache()
 
@@ -1005,6 +1006,7 @@ compiler option, or define _ALLOW_RTCc_IN_STL to acknowledge that you have recei
 #define _STD_BEGIN namespace std {
 #define _STD_END   }
 #define _STD       ::std::
+#define _RANGES    ::std::ranges::
 
 // We use the stdext (standard extension) namespace to contain extensions that are not part of the current standard
 #define _STDEXT_BEGIN namespace stdext {
