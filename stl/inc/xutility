@@ -600,11 +600,11 @@ namespace ranges {
     };
 
     namespace _Iter_move {
-        void iter_move(); // Block unqualified lookup
+        void iter_move(); // Block unqualified lookup per LWG-3247
 
         // clang-format off
         template <class _Ty>
-        concept _Has_ADL = _Has_class_or_enum_type<_Ty> // Per LWG-3270
+        concept _Has_ADL = _Has_class_or_enum_type<_Ty> // Per LWG-3299
             && requires(_Ty&& __t) { iter_move(static_cast<_Ty&&>(__t)); };
 
         template <class _Ty>
@@ -834,16 +834,12 @@ concept indirectly_movable_storable = indirectly_movable<_In, _Out> && writable<
 // CUSTOMIZATION POINT OBJECT iter_swap
 namespace ranges {
     namespace _Iter_swap {
-#ifndef __clang__ // TRANSITION, VSO-895622
-        void iter_swap();
-#endif // TRANSITION, VSO-895622
-
         template <class _Ty1, class _Ty2>
         void iter_swap(_Ty1, _Ty2) = delete;
 
         // clang-format off
         template <class _Ty1, class _Ty2>
-        concept _Has_ADL = (_Has_class_or_enum_type<_Ty1> || _Has_class_or_enum_type<_Ty2>) // Per LWG-3270
+        concept _Has_ADL = (_Has_class_or_enum_type<_Ty1> || _Has_class_or_enum_type<_Ty2>) // Per LWG-3299
             && requires(_Ty1&& __t1, _Ty2&& __t2) {
                 iter_swap(static_cast<_Ty1&&>(__t1), static_cast<_Ty2&&>(__t2));
             };
@@ -2003,6 +1999,16 @@ _NODISCARD _Ty _Fake_decay_copy(_Ty) noexcept;
 // (3) is non-throwing if and only if both conversion from decltype((E)) to T and destruction of T are non-throwing.
 
 namespace ranges {
+    // VARIABLE TEMPLATE _Has_complete_elements
+    template <class>
+    inline constexpr bool _Has_complete_elements = false;
+
+    // clang-format off
+    template <class _Ty>
+        requires requires(_Ty& __t) { sizeof(__t[0]); }
+    inline constexpr bool _Has_complete_elements<_Ty> = true;
+    // clang-format on
+
     // VARIABLE TEMPLATE ranges::enable_safe_range
     template <class>
     inline constexpr bool enable_safe_range = false;
@@ -2010,25 +2016,21 @@ namespace ranges {
     template <class _Rng>
     concept _Should_range_access = is_lvalue_reference_v<_Rng> || enable_safe_range<remove_cvref_t<_Rng>>;
 
-    // CUSTOMIZATION POINT OBJECT ranges::begin
+    // CUSTOMIZATION POINT OBJECT ranges::begin (Implements D2091R0)
     namespace _Begin {
-#ifndef __clang__ // TRANSITION, VSO-895622
-        void begin();
-#endif // TRANSITION, VSO-895622
-
         template <class _Ty>
-        void begin(_Ty&&) = delete;
+        void begin(_Ty&) = delete;
         template <class _Ty>
-        void begin(initializer_list<_Ty>) = delete; // Per PR of LWG-3258
+        void begin(const _Ty&) = delete;
 
         // clang-format off
         template <class _Ty>
-        concept _Has_member = requires(_Ty& __t) {
+        concept _Has_member = requires(_Ty __t) {
             { _Fake_decay_copy(__t.begin()) } -> input_or_output_iterator;
         };
 
         template <class _Ty>
-        concept _Has_ADL = requires(_Ty& __t) {
+        concept _Has_ADL = _Has_class_or_enum_type<_Ty> && requires(_Ty __t) {
             { _Fake_decay_copy(begin(__t)) } -> input_or_output_iterator;
         };
         // clang-format on
@@ -2039,12 +2041,17 @@ namespace ranges {
 
             template <class _Ty>
             _NODISCARD static _CONSTEVAL _Choice_t<_St> _Choose() noexcept {
+                _STL_INTERNAL_STATIC_ASSERT(is_lvalue_reference_v<_Ty>);
                 if constexpr (is_array_v<remove_reference_t<_Ty>>) {
+                    static_assert(_Has_complete_elements<_Ty>,
+                        "The range access customization point objects "
+                        "std::ranges::begin, std::ranges::end, std::ranges::rbegin, and std::ranges::rend "
+                        "do not accept arrays with incomplete element types.");
                     return {_St::_Array, true};
-                } else if constexpr (_Has_member<_Ty&>) {
-                    return {_St::_Member, noexcept(_Fake_decay_copy(_STD declval<_Ty&>().begin()))};
-                } else if constexpr (_Has_ADL<_Ty&>) {
-                    return {_St::_Non_member, noexcept(_Fake_decay_copy(begin(_STD declval<_Ty&>())))};
+                } else if constexpr (_Has_member<_Ty>) {
+                    return {_St::_Member, noexcept(_Fake_decay_copy(_STD declval<_Ty>().begin()))};
+                } else if constexpr (_Has_ADL<_Ty>) {
+                    return {_St::_Non_member, noexcept(_Fake_decay_copy(begin(_STD declval<_Ty>())))};
                 } else {
                     return {_St::_None};
                 }
@@ -2056,13 +2063,13 @@ namespace ranges {
         public:
             // clang-format off
             template <_Should_range_access _Ty>
-                requires (_Choice<_Ty>._Strategy != _St::_None)
-            _NODISCARD constexpr auto operator()(_Ty&& _Val) const noexcept(_Choice<_Ty>._No_throw) {
-                if constexpr (_Choice<_Ty>._Strategy == _St::_Array) {
+                requires (_Choice<_Ty&>._Strategy != _St::_None)
+            _NODISCARD constexpr auto operator()(_Ty&& _Val) const noexcept(_Choice<_Ty&>._No_throw) {
+                if constexpr (_Choice<_Ty&>._Strategy == _St::_Array) {
                     return _Val;
-                } else if constexpr (_Choice<_Ty>._Strategy == _St::_Member) {
+                } else if constexpr (_Choice<_Ty&>._Strategy == _St::_Member) {
                     return _Val.begin();
-                } else if constexpr (_Choice<_Ty>._Strategy == _St::_Non_member) {
+                } else if constexpr (_Choice<_Ty&>._Strategy == _St::_Non_member) {
                     return begin(_Val);
                 } else {
                     static_assert(_Always_false<_Ty>, "Should be unreachable");
@@ -2076,26 +2083,26 @@ namespace ranges {
         inline constexpr _Begin::_Cpo begin;
     }
 
-    // CUSTOMIZATION POINT OBJECT ranges::end
-    namespace _End {
-#ifndef __clang__ // TRANSITION, VSO-895622
-        void end();
-#endif // TRANSITION, VSO-895622
+    // ALIAS TEMPLATE ranges::iterator_t (Implements D2091R0)
+    template <class _Ty>
+    using iterator_t = decltype(_RANGES begin(_STD declval<_Ty&>()));
 
+    // CUSTOMIZATION POINT OBJECT ranges::end (Implements D2091R0)
+    namespace _End {
         template <class _Ty>
-        void end(_Ty&&) = delete;
+        void end(_Ty&) = delete;
         template <class _Ty>
-        void end(initializer_list<_Ty>) = delete; // Per PR of LWG-3258
+        void end(const _Ty&) = delete;
 
         // clang-format off
         template <class _Ty>
-        concept _Has_member = requires(_Ty& __t) {
-            { _Fake_decay_copy(__t.end()) } -> sentinel_for<decltype(_RANGES begin(__t))>;
+        concept _Has_member = requires(_Ty __t) {
+            { _Fake_decay_copy(__t.end()) } -> sentinel_for<iterator_t<_Ty>>;
         };
 
         template <class _Ty>
-        concept _Has_ADL = requires(_Ty& __t) {
-            { _Fake_decay_copy(end(__t)) } -> sentinel_for<decltype(_RANGES begin(__t))>;
+        concept _Has_ADL = _Has_class_or_enum_type<_Ty> && requires(_Ty __t) {
+            { _Fake_decay_copy(end(__t)) } -> sentinel_for<iterator_t<_Ty>>;
         };
         // clang-format on
 
@@ -2105,12 +2112,23 @@ namespace ranges {
 
             template <class _Ty>
             _NODISCARD static _CONSTEVAL _Choice_t<_St> _Choose() noexcept {
-                if constexpr (is_array_v<remove_reference_t<_Ty>>) {
-                    return {_St::_Array, true};
-                } else if constexpr (_Has_member<_Ty&>) {
-                    return {_St::_Member, noexcept(_Fake_decay_copy(_STD declval<_Ty&>().end()))};
-                } else if constexpr (_Has_ADL<_Ty&>) {
-                    return {_St::_Non_member, noexcept(_Fake_decay_copy(end(_STD declval<_Ty&>())))};
+                _STL_INTERNAL_STATIC_ASSERT(is_lvalue_reference_v<_Ty>);
+                using _UnRef = remove_reference_t<_Ty>;
+
+                if constexpr (is_array_v<_UnRef>) {
+                    static_assert(_Has_complete_elements<_UnRef>,
+                        "The range access customization point objects "
+                        "std::ranges::begin, std::ranges::end, std::ranges::rbegin, and std::ranges::rend "
+                        "do not accept arrays with incomplete element types.");
+                    if constexpr (extent_v<_UnRef> != 0) {
+                        return {_St::_Array, true};
+                    } else {
+                        return {_St::_None};
+                    }
+                } else if constexpr (_Has_member<_Ty>) {
+                    return {_St::_Member, noexcept(_Fake_decay_copy(_STD declval<_Ty>().end()))};
+                } else if constexpr (_Has_ADL<_Ty>) {
+                    return {_St::_Non_member, noexcept(_Fake_decay_copy(end(_STD declval<_Ty>())))};
                 } else {
                     return {_St::_None};
                 }
@@ -2122,13 +2140,14 @@ namespace ranges {
         public:
             // clang-format off
             template <_Should_range_access _Ty>
-                requires (_Choice<_Ty>._Strategy != _St::_None)
-            _NODISCARD constexpr auto operator()(_Ty&& _Val) const noexcept(_Choice<_Ty>._No_throw) {
-                if constexpr (_Choice<_Ty>._Strategy == _St::_Array) {
-                    return _Val + extent_v<remove_reference_t<_Ty>>;
-                } else if constexpr (_Choice<_Ty>._Strategy == _St::_Member) {
+                requires (_Choice<_Ty&>._Strategy != _St::_None)
+            _NODISCARD constexpr auto operator()(_Ty&& _Val) const noexcept(_Choice<_Ty&>._No_throw) {
+                if constexpr (_Choice<_Ty&>._Strategy == _St::_Array) {
+                    // extent_v<remove_reference_t<_Ty&>> reuses specializations from _Choose
+                    return _Val + extent_v<remove_reference_t<_Ty&>>;
+                } else if constexpr (_Choice<_Ty&>._Strategy == _St::_Member) {
                     return _Val.end();
-                } else if constexpr (_Choice<_Ty>._Strategy == _St::_Non_member) {
+                } else if constexpr (_Choice<_Ty&>._Strategy == _St::_Non_member) {
                     return end(_Val);
                 } else {
                     static_assert(_Always_false<_Ty>, "should be unreachable");
@@ -2155,28 +2174,24 @@ namespace ranges {
     concept safe_range = range<_Rng> && _Should_range_access<_Rng>;
     // clang-format on
 
-    // ALIAS TEMPLATE ranges::iterator_t
-    template <range _Rng>
-    using iterator_t = decltype(_RANGES begin(_STD declval<_Rng&>()));
-
     // ALIAS TEMPLATE ranges::sentinel_t
     template <range _Rng>
     using sentinel_t = decltype(_RANGES end(_STD declval<_Rng&>()));
 
     // ALIAS TEMPLATE ranges::range_difference_t
-    template <class _Rng>
+    template <range _Rng>
     using range_difference_t = iter_difference_t<iterator_t<_Rng>>;
 
     // ALIAS TEMPLATE ranges::range_value_t
-    template <class _Rng>
+    template <range _Rng>
     using range_value_t = iter_value_t<iterator_t<_Rng>>;
 
     // ALIAS TEMPLATE ranges::range_reference_t
-    template <class _Rng>
+    template <range _Rng>
     using range_reference_t = iter_reference_t<iterator_t<_Rng>>;
 
     // ALIAS TEMPLATE ranges::range_rvalue_reference_t
-    template <class _Rng>
+    template <range _Rng>
     using range_rvalue_reference_t = iter_rvalue_reference_t<iterator_t<_Rng>>;
 
     // CUSTOMIZATION POINT OBJECT ranges::cbegin
@@ -2211,30 +2226,26 @@ namespace ranges {
         inline constexpr _Cend_fn cend;
     }
 
-    // CUSTOMIZATION POINT OBJECT ranges::rbegin
+    // CUSTOMIZATION POINT OBJECT ranges::rbegin (Implements D2091R0)
     namespace _Rbegin {
-#ifndef __clang__ // TRANSITION, VSO-895622
-        void rbegin();
-#endif // TRANSITION, VSO-895622
-
         template <class _Ty>
-        void rbegin(_Ty&&) = delete;
+        void rbegin(_Ty&) = delete;
         template <class _Ty>
-        void rbegin(initializer_list<_Ty>) = delete; // Per PR of LWG-3258
+        void rbegin(const _Ty&) = delete;
 
         // clang-format off
         template <class _Ty>
-        concept _Has_member = requires(_Ty& __t) {
+        concept _Has_member = requires(_Ty __t) {
             { _Fake_decay_copy(__t.rbegin()) } -> input_or_output_iterator;
         };
 
         template <class _Ty>
-        concept _Has_ADL = requires(_Ty& __t) {
+        concept _Has_ADL = _Has_class_or_enum_type<_Ty> && requires(_Ty __t) {
             { _Fake_decay_copy(rbegin(__t)) } -> input_or_output_iterator;
         };
 
         template <class _Ty>
-        concept _Can_make_reverse = requires(_Ty& __t) {
+        concept _Can_make_reverse = requires(_Ty __t) {
             { _RANGES begin(__t) } -> bidirectional_iterator;
             { _RANGES end(__t) } -> same_as<decltype(_RANGES begin(__t))>;
         };
@@ -2246,13 +2257,13 @@ namespace ranges {
 
             template <class _Ty>
             _NODISCARD static _CONSTEVAL _Choice_t<_St> _Choose() noexcept {
-                if constexpr (_Has_member<_Ty&>) {
-                    return {_St::_Member, noexcept(_Fake_decay_copy(_STD declval<_Ty&>().rbegin()))};
-                } else if constexpr (_Has_ADL<_Ty&>) {
-                    return {_St::_Non_member, noexcept(_Fake_decay_copy(rbegin(_STD declval<_Ty&>())))};
-                } else if constexpr (_Can_make_reverse<_Ty&>) {
-                    return {
-                        _St::_Make_reverse, noexcept(_STD make_reverse_iterator(_RANGES end(_STD declval<_Ty&>())))};
+                _STL_INTERNAL_STATIC_ASSERT(is_lvalue_reference_v<_Ty>);
+                if constexpr (_Has_member<_Ty>) {
+                    return {_St::_Member, noexcept(_Fake_decay_copy(_STD declval<_Ty>().rbegin()))};
+                } else if constexpr (_Has_ADL<_Ty>) {
+                    return {_St::_Non_member, noexcept(_Fake_decay_copy(rbegin(_STD declval<_Ty>())))};
+                } else if constexpr (_Can_make_reverse<_Ty>) {
+                    return {_St::_Make_reverse, noexcept(_STD make_reverse_iterator(_RANGES end(_STD declval<_Ty>())))};
                 } else {
                     return {_St::_None};
                 }
@@ -2264,13 +2275,13 @@ namespace ranges {
         public:
             // clang-format off
             template <_Should_range_access _Ty>
-                requires (_Choice<_Ty>._Strategy != _St::_None)
-            _NODISCARD constexpr auto operator()(_Ty&& _Val) const noexcept(_Choice<_Ty>._No_throw) {
-                if constexpr (_Choice<_Ty>._Strategy == _St::_Member) {
+                requires (_Choice<_Ty&>._Strategy != _St::_None)
+            _NODISCARD constexpr auto operator()(_Ty&& _Val) const noexcept(_Choice<_Ty&>._No_throw) {
+                if constexpr (_Choice<_Ty&>._Strategy == _St::_Member) {
                     return _Val.rbegin();
-                } else if constexpr (_Choice<_Ty>._Strategy == _St::_Non_member) {
+                } else if constexpr (_Choice<_Ty&>._Strategy == _St::_Non_member) {
                     return rbegin(_Val);
-                } else if constexpr (_Choice<_Ty>._Strategy == _St::_Make_reverse) {
+                } else if constexpr (_Choice<_Ty&>._Strategy == _St::_Make_reverse) {
                     return _STD make_reverse_iterator(_RANGES end(_Val));
                 } else {
                     static_assert(_Always_false<_Ty>, "should be unreachable");
@@ -2284,30 +2295,26 @@ namespace ranges {
         inline constexpr _Rbegin::_Cpo rbegin;
     }
 
-    // CUSTOMIZATION POINT OBJECT ranges::rend
+    // CUSTOMIZATION POINT OBJECT ranges::rend (Implements D2091R0)
     namespace _Rend {
-#ifndef __clang__ // TRANSITION, VSO-895622
-        void rend();
-#endif // TRANSITION, VSO-895622
-
         template <class _Ty>
-        void rend(_Ty&&) = delete;
+        void rend(_Ty&) = delete;
         template <class _Ty>
-        void rend(initializer_list<_Ty>) = delete; // Per PR of LWG-3258
+        void rend(const _Ty&) = delete;
 
         // clang-format off
         template <class _Ty>
-        concept _Has_member = requires(_Ty& __t) {
+        concept _Has_member = requires(_Ty __t) {
             { _Fake_decay_copy(__t.rend()) } -> sentinel_for<decltype(_RANGES rbegin(__t))>;
         };
 
         template <class _Ty>
-        concept _Has_ADL = requires(_Ty& __t) {
+        concept _Has_ADL = _Has_class_or_enum_type<_Ty> && requires(_Ty __t) {
             { _Fake_decay_copy(rend(__t)) } -> sentinel_for<decltype(_RANGES rbegin(__t))>;
         };
 
         template <class _Ty>
-        concept _Can_make_reverse = requires(_Ty& __t) {
+        concept _Can_make_reverse = requires(_Ty __t) {
             { _RANGES begin(__t) } -> bidirectional_iterator;
             { _RANGES end(__t) } -> same_as<decltype(_RANGES begin(__t))>;
         };
@@ -2319,13 +2326,14 @@ namespace ranges {
 
             template <class _Ty>
             _NODISCARD static _CONSTEVAL _Choice_t<_St> _Choose() noexcept {
-                if constexpr (_Has_member<_Ty&>) {
-                    return {_St::_Member, noexcept(_Fake_decay_copy(_STD declval<_Ty&>().rend()))};
-                } else if constexpr (_Has_ADL<_Ty&>) {
-                    return {_St::_Non_member, noexcept(_Fake_decay_copy(rend(_STD declval<_Ty&>())))};
-                } else if constexpr (_Can_make_reverse<_Ty&>) {
+                _STL_INTERNAL_STATIC_ASSERT(is_lvalue_reference_v<_Ty>);
+                if constexpr (_Has_member<_Ty>) {
+                    return {_St::_Member, noexcept(_Fake_decay_copy(_STD declval<_Ty>().rend()))};
+                } else if constexpr (_Has_ADL<_Ty>) {
+                    return {_St::_Non_member, noexcept(_Fake_decay_copy(rend(_STD declval<_Ty>())))};
+                } else if constexpr (_Can_make_reverse<_Ty>) {
                     return {
-                        _St::_Make_reverse, noexcept(_STD make_reverse_iterator(_RANGES begin(_STD declval<_Ty&>())))};
+                        _St::_Make_reverse, noexcept(_STD make_reverse_iterator(_RANGES begin(_STD declval<_Ty>())))};
                 } else {
                     return {_St::_None};
                 }
@@ -2337,13 +2345,13 @@ namespace ranges {
         public:
             // clang-format off
             template <_Should_range_access _Ty>
-                requires (_Choice<_Ty>._Strategy != _St::_None)
-            _NODISCARD constexpr auto operator()(_Ty&& _Val) const noexcept(_Choice<_Ty>._No_throw) {
-                if constexpr (_Choice<_Ty>._Strategy == _St::_Member) {
+                requires (_Choice<_Ty&>._Strategy != _St::_None)
+            _NODISCARD constexpr auto operator()(_Ty&& _Val) const noexcept(_Choice<_Ty&>._No_throw) {
+                if constexpr (_Choice<_Ty&>._Strategy == _St::_Member) {
                     return _Val.rend();
-                } else if constexpr (_Choice<_Ty>._Strategy == _St::_Non_member) {
+                } else if constexpr (_Choice<_Ty&>._Strategy == _St::_Non_member) {
                     return rend(_Val);
-                } else if constexpr (_Choice<_Ty>._Strategy == _St::_Make_reverse) {
+                } else if constexpr (_Choice<_Ty&>._Strategy == _St::_Make_reverse) {
                     return _STD make_reverse_iterator(_RANGES begin(_Val));
                 } else {
                     static_assert(_Always_false<_Ty>, "should be unreachable");
@@ -2393,28 +2401,26 @@ namespace ranges {
     template <class>
     inline constexpr bool disable_sized_range = false;
 
-    // CUSTOMIZATION POINT OBJECT ranges::size
+    // CUSTOMIZATION POINT OBJECT ranges::size (Implements D2091R0)
     namespace _Size {
-#ifndef __clang__ // TRANSITION, VSO-895622
-        void size();
-#endif // TRANSITION, VSO-895622
-
         template <class _Ty>
-        void size(_Ty&&) = delete;
+        void size(_Ty&) = delete;
+        template <class _Ty>
+        void size(const _Ty&) = delete;
 
         // clang-format off
         template <class _Ty, class _UnCV>
-        concept _Has_member = !disable_sized_range<_UnCV> && requires(_Ty&& __t) {
-            { _Fake_decay_copy(static_cast<_Ty&&>(__t).size()) } -> integral;
+        concept _Has_member = !disable_sized_range<_UnCV> && requires(_Ty __t) {
+            { _Fake_decay_copy(__t.size()) } -> integral;
         };
 
         template <class _Ty, class _UnCV>
-        concept _Has_ADL = !disable_sized_range<_UnCV> && requires(_Ty&& __t) {
-            { _Fake_decay_copy(size(static_cast<_Ty&&>(__t))) } -> integral;
+        concept _Has_ADL = _Has_class_or_enum_type<_Ty> && !disable_sized_range<_UnCV> && requires(_Ty __t) {
+            { _Fake_decay_copy(size(__t)) } -> integral;
         };
 
         template <class _Ty>
-        concept _Can_difference = requires(_Ty&& __t) {
+        concept _Can_difference = requires(_Ty __t) {
             { _RANGES begin(__t) } -> forward_iterator;
             { _RANGES end(__t) } -> sized_sentinel_for<decltype(_RANGES begin(__t))>;
         };
@@ -2426,16 +2432,22 @@ namespace ranges {
 
             template <class _Ty>
             _NODISCARD static _CONSTEVAL _Choice_t<_St> _Choose() noexcept {
+                _STL_INTERNAL_STATIC_ASSERT(is_lvalue_reference_v<_Ty>);
                 using _UnCV = remove_cvref_t<_Ty>;
+
                 if constexpr (is_array_v<_UnCV>) {
-                    return {_St::_Array, true};
+                    if constexpr (extent_v<_UnCV> != 0) {
+                        return {_St::_Array, true};
+                    } else {
+                        return {_St::_None};
+                    }
                 } else if constexpr (_Has_member<_Ty, _UnCV>) {
                     return {_St::_Member, noexcept(_Fake_decay_copy(_STD declval<_Ty>().size()))};
                 } else if constexpr (_Has_ADL<_Ty, _UnCV>) {
                     return {_St::_Non_member, noexcept(_Fake_decay_copy(size(_STD declval<_Ty>())))};
                 } else if constexpr (_Can_difference<_Ty>) {
                     return {_St::_Subtract,
-                        noexcept(_RANGES end(_STD declval<_Ty&>()) - _RANGES begin(_STD declval<_Ty&>()))};
+                        noexcept(_RANGES end(_STD declval<_Ty>()) - _RANGES begin(_STD declval<_Ty>()))};
                 } else {
                     return {_St::_None};
                 }
@@ -2447,15 +2459,16 @@ namespace ranges {
         public:
             // clang-format off
             template <class _Ty>
-                requires (_Choice<_Ty>._Strategy != _St::_None)
-            _NODISCARD constexpr auto operator()([[maybe_unused]] _Ty&& _Val) const noexcept(_Choice<_Ty>._No_throw) {
-                if constexpr (_Choice<_Ty>._Strategy == _St::_Array) {
-                    return extent_v<remove_cvref_t<_Ty>>;
-                } else if constexpr (_Choice<_Ty>._Strategy == _St::_Member) {
-                    return static_cast<_Ty&&>(_Val).size();
-                } else if constexpr (_Choice<_Ty>._Strategy == _St::_Non_member) {
-                    return size(static_cast<_Ty&&>(_Val));
-                } else if constexpr (_Choice<_Ty>._Strategy == _St::_Subtract) {
+                requires (_Choice<_Ty&>._Strategy != _St::_None)
+            _NODISCARD constexpr auto operator()([[maybe_unused]] _Ty&& _Val) const noexcept(_Choice<_Ty&>._No_throw) {
+                if constexpr (_Choice<_Ty&>._Strategy == _St::_Array) {
+                    // extent_v<remove_cvref_t<_Ty&>> reuses specializations from _Choose
+                    return extent_v<remove_cvref_t<_Ty&>>;
+                } else if constexpr (_Choice<_Ty&>._Strategy == _St::_Member) {
+                    return _Val.size();
+                } else if constexpr (_Choice<_Ty&>._Strategy == _St::_Non_member) {
+                    return size(_Val);
+                } else if constexpr (_Choice<_Ty&>._Strategy == _St::_Subtract) {
                     const auto _Delta = _RANGES end(_Val) - _RANGES begin(_Val);
                     return static_cast<make_unsigned_t<remove_cv_t<decltype(_Delta)>>>(_Delta);
                 } else {
@@ -2470,21 +2483,21 @@ namespace ranges {
         inline constexpr _Size::_Cpo size;
     }
 
-    // CUSTOMIZATION POINT OBJECT ranges::empty
+    // CUSTOMIZATION POINT OBJECT ranges::empty (Implements D2091R0)
     namespace _Empty {
         // clang-format off
         template <class _Ty>
-        concept _Has_member = requires(_Ty&& __t) {
-            static_cast<bool>(static_cast<_Ty&&>(__t).empty());
+        concept _Has_member = requires(_Ty __t) {
+            static_cast<bool>(__t.empty());
         };
 
         template <class _Ty>
-        concept _Has_size = requires(_Ty&& __t) {
-            _RANGES size(static_cast<_Ty&&>(__t));
+        concept _Has_size = requires(_Ty __t) {
+            _RANGES size(__t);
         };
 
         template <class _Ty>
-        concept _Can_begin_end = requires(_Ty&& __t) {
+        concept _Can_begin_end = requires(_Ty __t) {
             { _RANGES begin(__t) } -> forward_iterator;
             _RANGES end(__t);
         };
@@ -2492,17 +2505,20 @@ namespace ranges {
 
         class _Cpo {
         private:
-            enum class _St { _None, _Member, _Size, _Compare };
+            enum class _St { _None, _Array, _Member, _Size, _Compare };
 
             template <class _Ty>
             _NODISCARD static _CONSTEVAL _Choice_t<_St> _Choose() noexcept {
-                if constexpr (_Has_member<_Ty>) {
+                _STL_INTERNAL_STATIC_ASSERT(is_lvalue_reference_v<_Ty>);
+                if constexpr (is_array_v<remove_reference_t<_Ty>>) {
+                    return {_St::_Array, true};
+                } else if constexpr (_Has_member<_Ty>) {
                     return {_St::_Member, noexcept(static_cast<bool>(_STD declval<_Ty>().empty()))};
                 } else if constexpr (_Has_size<_Ty>) {
                     return {_St::_Size, noexcept(_RANGES size(_STD declval<_Ty>()))};
                 } else if constexpr (_Can_begin_end<_Ty>) {
                     constexpr auto _Nothrow = noexcept(
-                        static_cast<bool>(_RANGES begin(_STD declval<_Ty&>()) == _RANGES end(_STD declval<_Ty&>())));
+                        static_cast<bool>(_RANGES begin(_STD declval<_Ty>()) == _RANGES end(_STD declval<_Ty>())));
                     return {_St::_Compare, _Nothrow};
                 } else {
                     return {_St::_None};
@@ -2515,13 +2531,15 @@ namespace ranges {
         public:
             // clang-format off
             template <class _Ty>
-                requires (_Choice<_Ty>._Strategy != _St::_None)
-            _NODISCARD constexpr bool operator()(_Ty&& _Val) const noexcept(_Choice<_Ty>._No_throw) {
-                if constexpr (_Choice<_Ty>._Strategy == _St::_Member) {
-                    return static_cast<bool>(static_cast<_Ty&&>(_Val).empty());
-                } else if constexpr (_Choice<_Ty>._Strategy == _St::_Size) {
-                    return _RANGES size(static_cast<_Ty&&>(_Val)) == 0;
-                } else if constexpr (_Choice<_Ty>._Strategy == _St::_Compare) {
+                requires (_Choice<_Ty&>._Strategy != _St::_None)
+            _NODISCARD constexpr bool operator()([[maybe_unused]] _Ty&& _Val) const noexcept(_Choice<_Ty&>._No_throw) {
+                if constexpr (_Choice<_Ty&>._Strategy == _St::_Array) {
+                    return false;
+                } else if constexpr (_Choice<_Ty&>._Strategy == _St::_Member) {
+                    return static_cast<bool>(_Val.empty());
+                } else if constexpr (_Choice<_Ty&>._Strategy == _St::_Size) {
+                    return _RANGES size(_Val) == 0;
+                } else if constexpr (_Choice<_Ty&>._Strategy == _St::_Compare) {
                     return static_cast<bool>(_RANGES begin(_Val) == _RANGES end(_Val));
                 } else {
                     static_assert(_Always_false<_Ty>, "should be unreachable");
@@ -2535,20 +2553,20 @@ namespace ranges {
         inline constexpr _Empty::_Cpo empty;
     }
 
-    // CUSTOMIZATION POINT OBJECT ranges::data
+    // CUSTOMIZATION POINT OBJECT ranges::data (Implements D2091R0)
     namespace _Data {
         // clang-format off
         template <class _Ty>
         concept _Points_to_object = is_pointer_v<_Ty> && is_object_v<remove_pointer_t<_Ty>>;
 
         template <class _Ty>
-        concept _Has_member = is_lvalue_reference_v<_Ty> && requires(_Ty& __t) {
+        concept _Has_member = requires(_Ty __t) {
             { _Fake_decay_copy(__t.data()) } -> _Points_to_object;
         };
 
         template <class _Ty>
-        concept _Has_contiguous_iterator = requires(_Ty&& __t) {
-            { _RANGES begin(static_cast<_Ty&&>(__t)) } -> contiguous_iterator;
+        concept _Has_contiguous_iterator = requires(_Ty __t) {
+            { _RANGES begin(__t) } -> contiguous_iterator;
         };
         // clang-format on
 
@@ -2558,8 +2576,9 @@ namespace ranges {
 
             template <class _Ty>
             _NODISCARD static _CONSTEVAL _Choice_t<_St> _Choose() noexcept {
+                _STL_INTERNAL_STATIC_ASSERT(is_lvalue_reference_v<_Ty>);
                 if constexpr (_Has_member<_Ty>) {
-                    return {_St::_Member, noexcept(_STD declval<_Ty&>().data())};
+                    return {_St::_Member, noexcept(_STD declval<_Ty>().data())};
                 } else if constexpr (_Has_contiguous_iterator<_Ty>) {
                     return {_St::_Address, noexcept(_STD to_address(_RANGES begin(_STD declval<_Ty>())))};
                 } else {
@@ -2572,13 +2591,13 @@ namespace ranges {
 
         public:
             // clang-format off
-            template <class _Ty>
-                requires (_Choice<_Ty>._Strategy != _St::_None)
-            _NODISCARD constexpr auto operator()(_Ty&& _Val) const noexcept(_Choice<_Ty>._No_throw) {
-                if constexpr (_Choice<_Ty>._Strategy == _St::_Member) {
+            template <_Should_range_access _Ty>
+                requires (_Choice<_Ty&>._Strategy != _St::_None)
+            _NODISCARD constexpr auto operator()(_Ty&& _Val) const noexcept(_Choice<_Ty&>._No_throw) {
+                if constexpr (_Choice<_Ty&>._Strategy == _St::_Member) {
                     return _Val.data();
-                } else if constexpr (_Choice<_Ty>._Strategy == _St::_Address) {
-                    return _STD to_address(_RANGES begin(static_cast<_Ty&&>(_Val)));
+                } else if constexpr (_Choice<_Ty&>._Strategy == _St::_Address) {
+                    return _STD to_address(_RANGES begin(_Val));
                 } else {
                     static_assert(_Always_false<_Ty>, "should be unreachable");
                 }
@@ -3579,7 +3598,7 @@ _OutIt _Copy_memmove(move_iterator<_InIt> _First, move_iterator<_InIt> _Last, _O
 
 #if _HAS_IF_CONSTEXPR
 template <class _InIt, class _OutIt>
-_CONSTEXPR20_ICE _OutIt _Copy_unchecked(_InIt _First, _InIt _Last, _OutIt _Dest) {
+_CONSTEXPR20 _OutIt _Copy_unchecked(_InIt _First, _InIt _Last, _OutIt _Dest) {
     // copy [_First, _Last) to [_Dest, ...)
     // note: _Copy_unchecked has callers other than the copy family
     if constexpr (_Ptr_copy_cat<_InIt, _OutIt>::_Trivially_copyable) {
@@ -3623,7 +3642,7 @@ _OutIt _Copy_unchecked(_InIt _First, _InIt _Last, _OutIt _Dest) {
 #endif // _HAS_IF_CONSTEXPR
 
 template <class _InIt, class _OutIt>
-_CONSTEXPR20_ICE _OutIt copy(_InIt _First, _InIt _Last, _OutIt _Dest) { // copy [_First, _Last) to [_Dest, ...)
+_CONSTEXPR20 _OutIt copy(_InIt _First, _InIt _Last, _OutIt _Dest) { // copy [_First, _Last) to [_Dest, ...)
     _Adl_verify_range(_First, _Last);
     const auto _UFirst = _Get_unwrapped(_First);
     const auto _ULast  = _Get_unwrapped(_Last);
@@ -3634,7 +3653,7 @@ _CONSTEXPR20_ICE _OutIt copy(_InIt _First, _InIt _Last, _OutIt _Dest) { // copy 
 
 #if _ITERATOR_DEBUG_ARRAY_OVERLOADS
 template <class _InIt, class _DestTy, size_t _DestSize>
-_CONSTEXPR20_ICE _DestTy* copy(_InIt _First, _InIt _Last, _DestTy (&_Dest)[_DestSize]) {
+_CONSTEXPR20 _DestTy* copy(_InIt _First, _InIt _Last, _DestTy (&_Dest)[_DestSize]) {
     // copy [_First, _Last) to [_Dest, ...)
     return _STD copy(_First, _Last, _Array_iterator<_DestTy, _DestSize>(_Dest))._Unwrapped();
 }
@@ -3664,7 +3683,7 @@ _DestTy* copy(_ExPo&&, _FwdIt1 _First, _FwdIt1 _Last, _DestTy (&_Dest)[_DestSize
 // FUNCTION TEMPLATE copy_n
 #if _HAS_IF_CONSTEXPR
 template <class _InIt, class _Diff, class _OutIt>
-_CONSTEXPR20_ICE _OutIt copy_n(_InIt _First, _Diff _Count_raw, _OutIt _Dest) {
+_CONSTEXPR20 _OutIt copy_n(_InIt _First, _Diff _Count_raw, _OutIt _Dest) {
     // copy [_First, _First + _Count) to [_Dest, ...)
     _Algorithm_int_t<_Diff> _Count = _Count_raw;
     if (0 < _Count) {
@@ -3741,7 +3760,7 @@ _OutIt copy_n(_InIt _First, _Diff _Count_raw, _OutIt _Dest) { // copy [_First, _
 
 #if _ITERATOR_DEBUG_ARRAY_OVERLOADS
 template <class _SourceTy, size_t _SourceSize, class _Diff, class _OutIt>
-_CONSTEXPR20_ICE _OutIt copy_n(_SourceTy (&_First)[_SourceSize], _Diff _Count_raw, _OutIt _Dest) {
+_CONSTEXPR20 _OutIt copy_n(_SourceTy (&_First)[_SourceSize], _Diff _Count_raw, _OutIt _Dest) {
     // copy [_First, _First + _Count) to [_Dest, ...), array source
     const _Algorithm_int_t<_Diff> _Count = _Count_raw;
     if (0 < _Count) {
@@ -3753,7 +3772,7 @@ _CONSTEXPR20_ICE _OutIt copy_n(_SourceTy (&_First)[_SourceSize], _Diff _Count_ra
 }
 
 template <class _InIt, class _Diff, class _DestTy, size_t _DestSize>
-_CONSTEXPR20_ICE _DestTy* copy_n(_InIt _First, _Diff _Count_raw, _DestTy (&_Dest)[_DestSize]) {
+_CONSTEXPR20 _DestTy* copy_n(_InIt _First, _Diff _Count_raw, _DestTy (&_Dest)[_DestSize]) {
     // copy [_First, _First + _Count) to [_Dest, ...), array dest
     const _Algorithm_int_t<_Diff> _Count = _Count_raw;
     if (0 < _Count) {
@@ -3765,7 +3784,7 @@ _CONSTEXPR20_ICE _DestTy* copy_n(_InIt _First, _Diff _Count_raw, _DestTy (&_Dest
 }
 
 template <class _SourceTy, size_t _SourceSize, class _Diff, class _DestTy, size_t _DestSize>
-_CONSTEXPR20_ICE _DestTy* copy_n(_SourceTy (&_First)[_SourceSize], _Diff _Count_raw, _DestTy (&_Dest)[_DestSize]) {
+_CONSTEXPR20 _DestTy* copy_n(_SourceTy (&_First)[_SourceSize], _Diff _Count_raw, _DestTy (&_Dest)[_DestSize]) {
     // copy [_First, _First + _Count) to [_Dest, ...), array source/dest
     const _Algorithm_int_t<_Diff> _Count = _Count_raw;
     if (0 < _Count) {
@@ -3836,7 +3855,7 @@ _BidIt2 _Copy_backward_memmove(move_iterator<_BidIt1> _First, move_iterator<_Bid
 
 #if _HAS_IF_CONSTEXPR
 template <class _BidIt1, class _BidIt2>
-_CONSTEXPR20_ICE _BidIt2 copy_backward(_BidIt1 _First, _BidIt1 _Last, _BidIt2 _Dest) {
+_CONSTEXPR20 _BidIt2 copy_backward(_BidIt1 _First, _BidIt1 _Last, _BidIt2 _Dest) {
     // copy [_First, _Last) backwards to [..., _Dest)
     _Adl_verify_range(_First, _Last);
     const auto _UFirst = _Get_unwrapped(_First);
@@ -3900,7 +3919,7 @@ _BidIt2 copy_backward(_ExPo&&, _BidIt1 _First, _BidIt1 _Last, _BidIt2 _Dest) noe
 // FUNCTION TEMPLATE move
 #if _HAS_IF_CONSTEXPR
 template <class _InIt, class _OutIt>
-_CONSTEXPR20_ICE _OutIt _Move_unchecked(_InIt _First, _InIt _Last, _OutIt _Dest) {
+_CONSTEXPR20 _OutIt _Move_unchecked(_InIt _First, _InIt _Last, _OutIt _Dest) {
     // move [_First, _Last) to [_Dest, ...)
     // note: _Move_unchecked has callers other than the move family
     if constexpr (_Ptr_move_cat<_InIt, _OutIt>::_Trivially_copyable) {
@@ -3944,7 +3963,7 @@ _OutIt _Move_unchecked(_InIt _First, _InIt _Last, _OutIt _Dest) {
 #endif // _HAS_IF_CONSTEXPR
 
 template <class _InIt, class _OutIt>
-_CONSTEXPR20_ICE _OutIt move(_InIt _First, _InIt _Last, _OutIt _Dest) {
+_CONSTEXPR20 _OutIt move(_InIt _First, _InIt _Last, _OutIt _Dest) {
     // move [_First, _Last) to [_Dest, ...)
     _Adl_verify_range(_First, _Last);
     const auto _UFirst = _Get_unwrapped(_First);
@@ -3985,7 +4004,7 @@ _DestTy* move(_ExPo&&, _FwdIt1 _First, _FwdIt1 _Last, _DestTy (&_Dest)[_DestSize
 // FUNCTION TEMPLATE move_backward
 #if _HAS_IF_CONSTEXPR
 template <class _BidIt1, class _BidIt2>
-_CONSTEXPR20_ICE _BidIt2 _Move_backward_unchecked(_BidIt1 _First, _BidIt1 _Last, _BidIt2 _Dest) {
+_CONSTEXPR20 _BidIt2 _Move_backward_unchecked(_BidIt1 _First, _BidIt1 _Last, _BidIt2 _Dest) {
     // move [_First, _Last) backwards to [..., _Dest)
     // note: _Move_backward_unchecked has callers other than the move_backward family
     if constexpr (_Ptr_move_cat<_BidIt1, _BidIt2>::_Trivially_copyable) {
@@ -4030,7 +4049,7 @@ _BidIt2 _Move_backward_unchecked(_BidIt1 _First, _BidIt1 _Last, _BidIt2 _Dest) {
 #endif // _HAS_IF_CONSTEXPR
 
 template <class _BidIt1, class _BidIt2>
-_CONSTEXPR20_ICE _BidIt2 move_backward(_BidIt1 _First, _BidIt1 _Last, _BidIt2 _Dest) {
+_CONSTEXPR20 _BidIt2 move_backward(_BidIt1 _First, _BidIt1 _Last, _BidIt2 _Dest) {
     // move [_First, _Last) backwards to [..., _Dest)
     _Adl_verify_range(_First, _Last);
     const auto _UFirst = _Get_unwrapped(_First);
@@ -4091,7 +4110,7 @@ _INLINE_VAR constexpr bool _Fill_memset_is_safe<_FwdIt, _Ty, false> = false;
 
 #if _HAS_IF_CONSTEXPR
 template <class _FwdIt, class _Ty>
-_CONSTEXPR20_ICE void fill(const _FwdIt _First, const _FwdIt _Last, const _Ty& _Val) {
+_CONSTEXPR20 void fill(const _FwdIt _First, const _FwdIt _Last, const _Ty& _Val) {
     // copy _Val through [_First, _Last)
     _Adl_verify_range(_First, _Last);
     auto _UFirst      = _Get_unwrapped(_First);
@@ -4146,7 +4165,7 @@ void fill(_ExPo&&, _FwdIt _First, _FwdIt _Last, const _Ty& _Val) noexcept /* ter
 // FUNCTION TEMPLATE fill_n
 #if _HAS_IF_CONSTEXPR
 template <class _OutIt, class _Diff, class _Ty>
-_CONSTEXPR20_ICE _OutIt fill_n(_OutIt _Dest, const _Diff _Count_raw, const _Ty& _Val) {
+_CONSTEXPR20 _OutIt fill_n(_OutIt _Dest, const _Diff _Count_raw, const _Ty& _Val) {
     // copy _Val _Count times through [_Dest, ...)
     _Algorithm_int_t<_Diff> _Count = _Count_raw;
     if (0 < _Count) {
@@ -4268,7 +4287,7 @@ typename _Equal_memcmp_is_safe_helper<remove_const_t<_Obj1>, remove_const_t<_Obj
 
 #if _HAS_IF_CONSTEXPR
 template <class _InIt1, class _InIt2, class _Pr>
-_NODISCARD _CONSTEXPR20_ICE bool equal(const _InIt1 _First1, const _InIt1 _Last1, const _InIt2 _First2, _Pr _Pred) {
+_NODISCARD _CONSTEXPR20 bool equal(const _InIt1 _First1, const _InIt1 _Last1, const _InIt2 _First2, _Pr _Pred) {
     // compare [_First1, _Last1) to [_First2, ...) using _Pred
     _Adl_verify_range(_First1, _Last1);
     auto _UFirst1      = _Get_unwrapped(_First1);
@@ -4335,7 +4354,7 @@ _NODISCARD bool equal(const _InIt1 _First1, const _InIt1 _Last1, const _InIt2 _F
 
 #if _ITERATOR_DEBUG_ARRAY_OVERLOADS
 template <class _InIt1, class _RightTy, size_t _RightSize, class _Pr, enable_if_t<!is_same_v<_RightTy*, _Pr>, int> = 0>
-_NODISCARD _CONSTEXPR20_ICE bool equal(
+_NODISCARD _CONSTEXPR20 bool equal(
     const _InIt1 _First1, const _InIt1 _Last1, _RightTy (&_First2)[_RightSize], _Pr _Pred) {
     // compare [_First1, _Last1) to [_First2, ...) using _Pred
     return _STD equal(_First1, _Last1, _Array_iterator<_RightTy, _RightSize>(_First2), _Pass_fn(_Pred));
@@ -4362,14 +4381,14 @@ _NODISCARD bool equal(_ExPo&& _Exec, _FwdIt1 _First1, _FwdIt1 _Last1, _RightTy (
 #endif // _HAS_CXX17
 
 template <class _InIt1, class _InIt2>
-_NODISCARD _CONSTEXPR20_ICE bool equal(const _InIt1 _First1, const _InIt1 _Last1, const _InIt2 _First2) {
+_NODISCARD _CONSTEXPR20 bool equal(const _InIt1 _First1, const _InIt1 _Last1, const _InIt2 _First2) {
     // compare [_First1, _Last1) to [_First2, ...)
     return _STD equal(_First1, _Last1, _First2, equal_to<>());
 }
 
 #if _ITERATOR_DEBUG_ARRAY_OVERLOADS
 template <class _InIt1, class _RightTy, size_t _RightSize>
-_NODISCARD _CONSTEXPR20_ICE bool equal(const _InIt1 _First1, const _InIt1 _Last1, _RightTy (&_First2)[_RightSize]) {
+_NODISCARD _CONSTEXPR20 bool equal(const _InIt1 _First1, const _InIt1 _Last1, _RightTy (&_First2)[_RightSize]) {
     // compare [_First1, _Last1) to [_First2, ...)
     return _STD equal(_First1, _Last1, _First2, equal_to<>());
 }
@@ -4395,7 +4414,7 @@ _NODISCARD bool equal(_ExPo&& _Exec, const _FwdIt1 _First1, const _FwdIt1 _Last1
 
 #if _HAS_IF_CONSTEXPR
 template <class _InIt1, class _InIt2, class _Pr>
-_NODISCARD _CONSTEXPR20_ICE bool equal(
+_NODISCARD _CONSTEXPR20 bool equal(
     const _InIt1 _First1, const _InIt1 _Last1, const _InIt2 _First2, const _InIt2 _Last2, _Pr _Pred) {
     // compare [_First1, _Last1) to [_First2, _Last2) using _Pred
     _Adl_verify_range(_First1, _Last1);
@@ -4480,7 +4499,7 @@ _NODISCARD bool equal(_ExPo&& _Exec, const _FwdIt1 _First1, const _FwdIt1 _Last1
 #endif // _HAS_CXX17
 
 template <class _InIt1, class _InIt2>
-_NODISCARD _CONSTEXPR20_ICE bool equal(
+_NODISCARD _CONSTEXPR20 bool equal(
     const _InIt1 _First1, const _InIt1 _Last1, const _InIt2 _First2, const _InIt2 _Last2) {
     // compare [_First1, _Last1) to [_First2, _Last2)
     return _STD equal(_First1, _Last1, _First2, _Last2, equal_to<>());
@@ -4566,7 +4585,7 @@ _NODISCARD constexpr bool _Lex_compare_unchecked(
 }
 
 template <class _InIt1, class _InIt2, class _Pr, class _Memcmp_pr>
-_NODISCARD _CONSTEXPR20_ICE bool _Lex_compare_unchecked(
+_NODISCARD _CONSTEXPR20 bool _Lex_compare_unchecked(
     _InIt1 _First1, _InIt1 _Last1, _InIt2 _First2, _InIt2 _Last2, _Pr _Pred, _Lex_compare_optimize<_Memcmp_pr>) {
     // order [_First1, _Last1) vs. [_First2, _Last2) memcmp optimization
 #ifdef __cpp_lib_is_constant_evaluated
@@ -4582,7 +4601,7 @@ _NODISCARD _CONSTEXPR20_ICE bool _Lex_compare_unchecked(
 }
 
 template <class _InIt1, class _InIt2, class _Pr>
-_NODISCARD _CONSTEXPR20_ICE bool lexicographical_compare(
+_NODISCARD _CONSTEXPR20 bool lexicographical_compare(
     _InIt1 _First1, _InIt1 _Last1, _InIt2 _First2, _InIt2 _Last2, _Pr _Pred) {
     // order [_First1, _Last1) vs. [_First2, _Last2) using _Pred
     _Adl_verify_range(_First1, _Last1);
@@ -4596,7 +4615,7 @@ _NODISCARD _CONSTEXPR20_ICE bool lexicographical_compare(
 }
 
 template <class _InIt1, class _InIt2>
-_NODISCARD _CONSTEXPR20_ICE bool lexicographical_compare(_InIt1 _First1, _InIt1 _Last1, _InIt2 _First2, _InIt2 _Last2) {
+_NODISCARD _CONSTEXPR20 bool lexicographical_compare(_InIt1 _First1, _InIt1 _Last1, _InIt2 _First2, _InIt2 _Last2) {
     // order [_First1, _Last1) vs. [_First2, _Last2)
     return _STD lexicographical_compare(_First1, _Last1, _First2, _Last2, less<>());
 }
@@ -4677,7 +4696,7 @@ _NODISCARD constexpr _InIt _Find_unchecked1(_InIt _First, const _InIt _Last, con
 }
 
 template <class _InIt, class _Ty>
-_NODISCARD _CONSTEXPR20_ICE _InIt _Find_unchecked1(_InIt _First, const _InIt _Last, const _Ty& _Val, true_type) {
+_NODISCARD _CONSTEXPR20 _InIt _Find_unchecked1(_InIt _First, const _InIt _Last, const _Ty& _Val, true_type) {
     // find first byte matching integral _Val
     if (!_Within_limits(_First, _Val)) {
         return _Last;
@@ -4694,7 +4713,7 @@ _NODISCARD _CONSTEXPR20_ICE _InIt _Find_unchecked1(_InIt _First, const _InIt _La
 }
 
 template <class _InIt, class _Ty>
-_NODISCARD _CONSTEXPR20_ICE _InIt _Find_unchecked(const _InIt _First, const _InIt _Last, const _Ty& _Val) {
+_NODISCARD _CONSTEXPR20 _InIt _Find_unchecked(const _InIt _First, const _InIt _Last, const _Ty& _Val) {
     // find first matching _Val; choose optimization
     // activate optimization for pointers to (const) bytes and integral values
     using _Memchr_opt = bool_constant<
@@ -4705,7 +4724,7 @@ _NODISCARD _CONSTEXPR20_ICE _InIt _Find_unchecked(const _InIt _First, const _InI
 }
 
 template <class _InIt, class _Ty>
-_NODISCARD _CONSTEXPR20_ICE _InIt find(_InIt _First, const _InIt _Last, const _Ty& _Val) { // find first matching _Val
+_NODISCARD _CONSTEXPR20 _InIt find(_InIt _First, const _InIt _Last, const _Ty& _Val) { // find first matching _Val
     _Adl_verify_range(_First, _Last);
     _Seek_wrapped(_First, _Find_unchecked(_Get_unwrapped(_First), _Get_unwrapped(_Last), _Val));
     return _First;
@@ -4950,7 +4969,7 @@ _NODISCARD _CONSTEXPR20 bool is_permutation(_FwdIt1 _First1, _FwdIt1 _Last1, _Fw
 // FUNCTION TEMPLATE reverse
 #if _HAS_IF_CONSTEXPR
 template <class _BidIt>
-_CONSTEXPR20_ICE void reverse(const _BidIt _First, const _BidIt _Last) { // reverse elements in [_First, _Last)
+_CONSTEXPR20 void reverse(const _BidIt _First, const _BidIt _Last) { // reverse elements in [_First, _Last)
     _Adl_verify_range(_First, _Last);
     auto _UFirst = _Get_unwrapped(_First);
     auto _ULast  = _Get_unwrapped(_Last);
