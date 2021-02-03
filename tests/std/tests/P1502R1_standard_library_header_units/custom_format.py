@@ -1,19 +1,15 @@
 # Copyright (c) Microsoft Corporation.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-from pathlib import Path
+import os
 
 from stl.test.format import STLTestFormat, TestStep
+from stl.test.tests import TestType
 
 
 class CustomTestFormat(STLTestFormat):
-    def getBuildSteps(self, test, lit_config, shared):
-        shared.exec_dir = test.getExecDir()
-        output_base = test.getOutputBaseName()
-        output_dir = test.getOutputDir()
-        source_path = Path(test.getSourcePath())
-
-        stl_headers = [
+    def getBuildSteps(self, test, litConfig, shared):
+        stlHeaders = [
             'algorithm',
             'any',
             'array',
@@ -93,34 +89,42 @@ class CustomTestFormat(STLTestFormat):
             'version',
         ]
 
-        compile_test_cpp_with_edg = test.cxx.flags.count('/BE') == 1
+        outputDir, outputBase = test.getTempPaths()
+        sourcePath = test.getSourcePath()
 
-        if compile_test_cpp_with_edg:
-            test.cxx.flags.remove('/BE')
+        compileTestCppWithEdg = False
+        if '/BE' in test.flags:
+            compileTestCppWithEdg = True
+            test.flags.remove('/BE')
 
-        header_unit_options = []
+        if '/BE' in test.compileFlags:
+            compileTestCppWithEdg = True
+            test.compileFlags.remove('/BE')
 
-        for header in stl_headers:
-            header_obj_path = output_dir / (header + '.obj')
+        exportHeaderOptions = ['/exportHeader', '/Fo', '/MP']
+        headerUnitOptions = []
+        for header in stlHeaders:
+            headerAbsolutePath = os.path.join(litConfig.cxx_headers, header)
 
-            header_unit_options.append('/headerUnit')
-            header_unit_options.append('{0}/{1}={1}.ifc'.format(test.config.cxx_headers, header))
+            exportHeaderOptions.append(headerAbsolutePath)
 
-            if not compile_test_cpp_with_edg:
-                header_unit_options.append(str(header_obj_path))
+            headerUnitOptions.append('/headerUnit')
+            headerUnitOptions.append('{0}={1}.ifc'.format(headerAbsolutePath, header))
 
-            cmd, out_files = test.cxx._basicCmd(source_files = [], out = None,
-                flags = ['/exportHeader', '<{}>'.format(header), '/Fo{}'.format(str(header_obj_path))],
-                skip_mode_flags = True)
-            yield TestStep(cmd, shared.exec_dir, [], test.cxx.compile_env)
+            if not compileTestCppWithEdg:
+                headerUnitOptions.append(os.path.join(outputDir, header + '.obj'))
 
-        if compile_test_cpp_with_edg:
-            test.cxx.flags.append('/BE')
+        cmd = [test.cxx, *test.flags, *test.compileFlags, *exportHeaderOptions]
+        yield TestStep(cmd, shared.execDir, shared.env, False)
 
-        cmd, out_files, shared.exec_file = \
-            test.cxx.executeBasedOnFlagsCmd([source_path],
-                                            output_dir, shared.exec_dir,
-                                            output_base, header_unit_options, [], [])
+        if compileTestCppWithEdg:
+            test.compileFlags.append('/BE')
 
-        yield TestStep(cmd, shared.exec_dir, [source_path],
-                       test.cxx.compile_env)
+        if TestType.COMPILE in test.testType:
+            cmd = [test.cxx, '/c', sourcePath, *test.flags, *test.compileFlags, *headerUnitOptions]
+        elif TestType.RUN in test.testType:
+            shared.execFile = outputBase + '.exe'
+            cmd = [test.cxx, sourcePath, *test.flags, *test.compileFlags, *headerUnitOptions, '/Fe' + shared.execFile,
+                   '/link', *test.linkFlags]
+
+        yield TestStep(cmd, shared.execDir, shared.env, False)
