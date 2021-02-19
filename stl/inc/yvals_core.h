@@ -133,6 +133,7 @@
 // _HAS_CXX20 directly controls:
 // P0019R8 atomic_ref
 // P0020R6 atomic<float>, atomic<double>, atomic<long double>
+// P0053R7 <syncstream>
 // P0122R7 <span>
 // P0202R3 constexpr For <algorithm> And exchange()
 // P0318R1 unwrap_reference, unwrap_ref_decay
@@ -159,6 +160,7 @@
 // P0556R3 <bit> Integral Power-Of-2 Operations (renamed by P1956R1)
 // P0586R2 Integer Comparison Functions
 // P0595R2 is_constant_evaluated()
+// P0608R3 Improving variant's Converting Constructor/Assignment
 // P0616R0 Using move() In <numeric>
 // P0631R8 <numbers> Math Constants
 // P0646R1 list/forward_list remove()/remove_if()/unique() Return size_type
@@ -167,6 +169,7 @@
 // P0660R10 <stop_token> And jthread
 // P0674R1 make_shared() For Arrays
 // P0718R2 atomic<shared_ptr<T>>, atomic<weak_ptr<T>>
+// P0753R2 osyncstream Manipulators
 // P0758R1 is_nothrow_convertible
 // P0768R1 Library Support For The Spaceship Comparison Operator <=>
 // P0769R2 shift_left(), shift_right()
@@ -181,6 +184,7 @@
 // P0919R3 Heterogeneous Lookup For Unordered Containers
 // P0966R1 string::reserve() Should Not Shrink
 // P1001R2 execution::unseq
+// P1004R2 constexpr std::vector
 // P1006R1 constexpr For pointer_traits<T*>::pointer_to()
 // P1007R3 assume_aligned()
 // P1020R1 Smart Pointer Creation With Default Initialization
@@ -1202,6 +1206,10 @@
 #define __cpp_lib_constexpr_tuple       201811L
 #define __cpp_lib_constexpr_utility     201811L
 
+#if defined(__cpp_constexpr_dynamic_alloc) && !defined(__clang__) // TRANSITION, LLVM-48606
+#define __cpp_lib_constexpr_vector 201907L
+#endif // defined(__cpp_constexpr_dynamic_alloc) && !defined(__clang__)
+
 #ifdef __cpp_impl_coroutine // TRANSITION, Clang coroutine support
 #define __cpp_lib_coroutine 201902L
 #endif // __cpp_impl_coroutine
@@ -1241,6 +1249,7 @@
 #define __cpp_lib_span                    202002L
 #define __cpp_lib_ssize                   201902L
 #define __cpp_lib_starts_ends_with        201711L
+#define __cpp_lib_syncbuf                 201803L
 
 #ifdef __cpp_lib_concepts // TRANSITION, GH-395
 #define __cpp_lib_three_way_comparison 201711L
@@ -1284,7 +1293,7 @@
 #endif
 
 // Functions that became constexpr in C++20 via P0980R1 or P1004R2
-#if defined(__cpp_lib_constexpr_dynamic_alloc) && !defined(__clang__) // TRANSITION:LLVM-48606
+#if defined(__cpp_lib_constexpr_dynamic_alloc) && !defined(__clang__) // TRANSITION, LLVM-48606
 #define _CONSTEXPR20_CONTAINER constexpr
 #else
 #define _CONSTEXPR20_CONTAINER inline
