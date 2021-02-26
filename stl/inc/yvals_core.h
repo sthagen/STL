@@ -150,6 +150,7 @@
 // P0458R2 contains() For Ordered And Unordered Associative Containers
 // P0463R1 endian
 // P0466R5 Layout-Compatibility And Pointer-Interconvertibility Traits
+// P0475R1 Guaranteed Copy Elision For Piecewise Construction
 // P0476R2 <bit> bit_cast
 // P0482R6 Library Support For char8_t
 //     (mbrtoc8 and c8rtomb not yet implemented)
@@ -159,6 +160,7 @@
 // P0553R4 <bit> Rotating And Counting Functions
 // P0556R3 <bit> Integral Power-Of-2 Operations (renamed by P1956R1)
 // P0586R2 Integer Comparison Functions
+// P0591R4 Utility Functions For Uses-Allocator Construction
 // P0595R2 is_constant_evaluated()
 // P0608R3 Improving variant's Converting Constructor/Assignment
 // P0616R0 Using move() In <numeric>
@@ -211,6 +213,7 @@
 // P1456R1 Move-Only Views
 // P1474R1 Helpful Pointers For contiguous_iterator
 // P1612R1 Relocating endian To <bit>
+// P1614R2 Adding Spaceship <=> To The Library
 // P1645R1 constexpr For <numeric> Algorithms
 // P1651R0 bind_front() Should Not Unwrap reference_wrapper
 // P1690R1 Refining Heterogeneous Lookup For Unordered Containers
@@ -1252,7 +1255,7 @@
 #define __cpp_lib_syncbuf                 201803L
 
 #ifdef __cpp_lib_concepts // TRANSITION, GH-395
-#define __cpp_lib_three_way_comparison 201711L
+#define __cpp_lib_three_way_comparison 201907L
 #endif // __cpp_lib_concepts
 
 #define __cpp_lib_to_address    201711L
