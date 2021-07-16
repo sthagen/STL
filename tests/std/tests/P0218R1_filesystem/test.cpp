@@ -3287,6 +3287,15 @@ void test_remove() {
     EXPECT(!exists(filename, ec));
     EXPECT(good(ec));
 
+    create_file_containing(filename, L"hello");
+    permissions(filename, perms::owner_write | perms::group_write | perms::others_write, perm_options::remove);
+
+    // remove a read-only file also
+    EXPECT(remove(filename, ec));
+    EXPECT(good(ec));
+    EXPECT(!exists(filename, ec));
+    EXPECT(good(ec));
+
     EXPECT(remove(dirname, ec));
     EXPECT(good(ec));
     EXPECT(!exists(dirname, ec));
@@ -3908,9 +3917,7 @@ void run_interactive_tests(int argc, wchar_t* argv[]) {
 // mode.
 void test_devcom_953628() { // COMPILE-ONLY
     struct S : wstring {};
-#if defined(MSVC_INTERNAL_TESTING) || defined(__clang__) || defined(__EDG__) // TRANSITION, VSO-1270432
     path{S{}};
-#endif // defined(MSVC_INTERNAL_TESTING) || defined(__clang__) || defined(__EDG__)
 }
 
 int wmain(int argc, wchar_t* argv[]) {
@@ -3926,7 +3933,7 @@ int wmain(int argc, wchar_t* argv[]) {
 
     if (argc > 1) {
         run_interactive_tests(argc, argv);
-        return 0; // not a PM_ constant because the caller isn't run.pl here
+        return 0;
     }
 
     for (const auto& testCase : decompTestCases) {

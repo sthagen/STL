@@ -145,12 +145,12 @@ public:
 
     _NODISCARD id get_id() const noexcept;
 
-    _NODISCARD static unsigned int hardware_concurrency() noexcept {
-        return _Thrd_hardware_concurrency();
+    _NODISCARD native_handle_type native_handle() noexcept /* strengthened */ { // return Win32 HANDLE as void *
+        return _Thr._Hnd;
     }
 
-    _NODISCARD native_handle_type native_handle() { // return Win32 HANDLE as void *
-        return _Thr._Hnd;
+    _NODISCARD static unsigned int hardware_concurrency() noexcept {
+        return _Thrd_hardware_concurrency();
     }
 
 private:
@@ -186,6 +186,9 @@ namespace this_thread {
 
     template <class _Clock, class _Duration>
     void sleep_until(const chrono::time_point<_Clock, _Duration>& _Abs_time) {
+#if _HAS_CXX20
+        static_assert(chrono::is_clock_v<_Clock>, "Clock type required");
+#endif // _HAS_CXX20
         for (;;) {
             const auto _Now = _Clock::now();
             if (_Abs_time <= _Now) {
@@ -339,6 +342,10 @@ public:
 
     _NODISCARD id get_id() const noexcept {
         return _Impl.get_id();
+    }
+
+    _NODISCARD native_handle_type native_handle() noexcept /* strengthened */ {
+        return _Impl.native_handle();
     }
 
     _NODISCARD stop_source get_stop_source() noexcept {

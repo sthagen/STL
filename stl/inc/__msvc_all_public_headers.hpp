@@ -46,6 +46,7 @@
 #include <limits>
 #include <numbers>
 #include <ratio>
+#include <source_location>
 #include <type_traits>
 #include <utility>
 #include <version>
@@ -86,6 +87,7 @@
 #include <deque>
 #include <exception>
 #include <filesystem>
+#include <format>
 #include <forward_list>
 #include <fstream>
 #include <functional>

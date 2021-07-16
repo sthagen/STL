@@ -1,11 +1,22 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+#include <memory>
+
+// Regression test for GH-1830, in which ranges::uninitialized_copy used
+// _Rewrap_iterator which was defined in <algorithm> (now in <xutility>).
+
+void unused_function() {
+    const int src[] = {11, 22, 33, 44, 55};
+    int dst[5];
+
+    std::ranges::uninitialized_copy(src, dst);
+}
+
 #include <algorithm>
 #include <cassert>
 #include <concepts>
 #include <cstdlib>
-#include <memory>
 #include <ranges>
 #include <span>
 #include <utility>
@@ -203,7 +214,7 @@ struct memcpy_test {
     static constexpr int expected_input_long[]  = {13, 55, 12345, 42};
 
     static void call() {
-        { // Validate only range overload
+        { // Validate matching ranges
             int input[]  = {13, 55, 12345};
             int output[] = {-1, -1, -1};
 
@@ -233,6 +244,30 @@ struct memcpy_test {
             assert(++result.in == end(input));
             assert(result.out == end(output));
             assert(ranges::equal(input, expected_input_long));
+            assert(ranges::equal(output, expected_output));
+        }
+
+        { // Validate non-common input range
+            int input[]  = {13, 55, 12345};
+            int output[] = {-1, -1, -1};
+
+            const auto result =
+                ranges::uninitialized_copy(begin(input), unreachable_sentinel, begin(output), end(output));
+            assert(result.in == end(input));
+            assert(result.out == end(output));
+            assert(ranges::equal(input, expected_input));
+            assert(ranges::equal(output, expected_output));
+        }
+
+        { // Validate non-common output range
+            int input[]  = {13, 55, 12345};
+            int output[] = {-1, -1, -1};
+
+            const auto result =
+                ranges::uninitialized_copy(begin(input), end(input), begin(output), unreachable_sentinel);
+            assert(result.in == end(input));
+            assert(result.out == end(output));
+            assert(ranges::equal(input, expected_input));
             assert(ranges::equal(output, expected_output));
         }
     }

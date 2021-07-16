@@ -111,6 +111,7 @@
 // P0858R0 Constexpr Iterator Requirements
 // P1065R2 constexpr INVOKE
 //     (the std::invoke function only; other components like bind and reference_wrapper are C++20 only)
+// P2162R2 Inheriting From variant
 
 // _HAS_CXX17 indirectly controls:
 // N4190 Removing auto_ptr, random_shuffle(), And Old <functional> Stuff
@@ -140,7 +141,6 @@
 // P0325R4 to_array()
 // P0339R6 polymorphic_allocator<>
 // P0355R7 <chrono> Calendars And Time Zones
-//     (partially implemented)
 // P0356R5 bind_front()
 // P0357R3 Supporting Incomplete Types In reference_wrapper
 // P0408R7 Efficient Access To basic_stringbuf's Buffer
@@ -165,6 +165,7 @@
 // P0608R3 Improving variant's Converting Constructor/Assignment
 // P0616R0 Using move() In <numeric>
 // P0631R8 <numbers> Math Constants
+// P0645R10 <format> Text Formatting
 // P0646R1 list/forward_list remove()/remove_if()/unique() Return size_type
 // P0653R2 to_address()
 // P0655R1 visit<R>()
@@ -180,7 +181,6 @@
 // P0879R0 constexpr For Swapping Functions
 // P0887R1 type_identity
 // P0896R4 Ranges
-//     (partially implemented)
 // P0898R3 Standard Library Concepts
 // P0912R5 Library Support For Coroutines
 // P0919R3 Heterogeneous Lookup For Unordered Containers
@@ -194,6 +194,7 @@
 // P1023R0 constexpr For std::array Comparisons
 // P1024R3 Enhancing span Usability
 // P1032R1 Miscellaneous constexpr
+// P1035R7 Input Range Adaptors
 // P1065R2 constexpr INVOKE
 //     (except the std::invoke function which is implemented in C++17)
 // P1085R2 Removing span Comparisons
@@ -201,27 +202,31 @@
 // P1123R0 Atomic Compare-And-Exchange With Padding Bits For atomic_ref
 // P1135R6 The C++20 Synchronization Library
 // P1207R4 Movability Of Single-Pass Iterators
-//     (partially implemented)
+// P1208R6 <source_location>
 // P1209R0 erase_if(), erase()
 // P1227R2 Signed std::ssize(), Unsigned span::size()
 // P1243R4 Rangify New Algorithms
-//     (partially implemented)
 // P1248R1 Fixing Relations
+// P1252R2 Ranges Design Cleanup
 // P1357R1 is_bounded_array, is_unbounded_array
 // P1391R4 Range Constructor For string_view
 // P1394R4 Range Constructor For span
 // P1423R3 char8_t Backward Compatibility Remediation
 // P1456R1 Move-Only Views
 // P1474R1 Helpful Pointers For contiguous_iterator
+// P1522R1 Iterator Difference Type And Integer Overflow
+//     (technically conforming, but it would be nice to implement a 65-bit integer-like type)
+// P1523R1 Views And Size Types
 // P1612R1 Relocating endian To <bit>
 // P1614R2 Adding Spaceship <=> To The Library
+// P1638R1 basic_istream_view::iterator Should Not Be Copyable
 // P1645R1 constexpr For <numeric> Algorithms
 // P1651R0 bind_front() Should Not Unwrap reference_wrapper
 // P1690R1 Refining Heterogeneous Lookup For Unordered Containers
 // P1716R3 Range Comparison Algorithms Are Over-Constrained
 // P1739R4 Avoiding Template Bloat For Ranges
-//     (partially implemented)
 // P1754R1 Rename Concepts To standard_case
+// P1862R1 Range Adaptors For Non-Copyable Iterators
 // P1865R1 Adding max() To latch And barrier
 // P1870R1 Rename forwarding-range To borrowed_range (Was safe_range before LWG-3379)
 // P1871R1 disable_sized_sentinel_for
@@ -234,9 +239,16 @@
 // P1964R2 Replacing boolean With boolean-testable
 // P1973R1 Renaming default_init To for_overwrite
 // P1976R2 Explicit Constructors For Fixed-Extent span From Dynamic-Extent Ranges
+// P1983R0 Fixing Minor Ranges Issues
+// P1994R1 elements_view Needs Its Own sentinel
+// P2017R1 Conditionally Borrowed Ranges
 // P2091R0 Fixing Issues With Range Access CPOs
 // P2102R0 Making "Implicit Expression Variations" More Explicit
+// P2106R0 Range Algorithm Result Types
 // P2116R0 Removing tuple-Like Protocol Support From Fixed-Extent span
+// P2259R1 Repairing Input Range Adaptors And counted_iterator
+//     (partially implemented)
+// P2325R3 Views Should Not Be Required To Be Default Constructible
 // P????R? directory_entry::clear_cache()
 
 // _HAS_CXX20 indirectly controls:
@@ -246,6 +258,14 @@
 // P0767R1 Deprecating is_pod
 // P1831R1 Deprecating volatile In The Standard Library
 // Other C++20 deprecation warnings
+
+// _HAS_CXX23 directly controls:
+// P1048R1 is_scoped_enum
+// P1679R3 contains() For basic_string/basic_string_view
+// P1682R3 to_underlying() For Enumerations
+// P1989R2 Range Constructor For string_view
+// P2166R1 Prohibiting basic_string And basic_string_view Construction From nullptr
+// P2186R2 Removing Garbage Collection Support
 
 // Parallel Algorithms Notes
 // C++ allows an implementation to implement parallel algorithms as calls to the serial algorithms.
@@ -343,6 +363,20 @@
 // * unique_copy
 
 #include <vcruntime.h>
+
+// TRANSITION, <vcruntime.h> should define _HAS_CXX23
+#ifndef _HAS_CXX23
+#if _HAS_CXX20 && (defined(_MSVC_LANG) && _MSVC_LANG > 202002L || defined(__cplusplus) && __cplusplus > 202002L)
+#define _HAS_CXX23 1
+#else
+#define _HAS_CXX23 0
+#endif
+#endif // _HAS_CXX23
+
+#if _HAS_CXX23 && !_HAS_CXX20
+#error _HAS_CXX23 must imply _HAS_CXX20.
+#endif
+
 #include <xkeycheck.h> // The _HAS_CXX tags must be defined before including this.
 
 #ifndef _STL_WARNING_LEVEL
@@ -496,25 +530,31 @@
 #define _STL_DISABLE_DEPRECATED_WARNING \
     _Pragma("clang diagnostic push")    \
     _Pragma("clang diagnostic ignored \"-Wdeprecated-declarations\"")
-#else // __clang__
+#elif defined(__EDG__) || defined(__CUDACC__) || defined(__INTEL_COMPILER) // TRANSITION, VSO-1329304
 #define _STL_DISABLE_DEPRECATED_WARNING \
     __pragma(warning(push))             \
     __pragma(warning(disable : 4996)) // was declared deprecated
-#endif // __clang__
+#else // vvv MSVC vvv
+#define _STL_DISABLE_DEPRECATED_WARNING \
+    _Pragma("warning(push)")            \
+    _Pragma("warning(disable : 4996)") // was declared deprecated
+#endif // ^^^ MSVC ^^^
 #endif // _STL_DISABLE_DEPRECATED_WARNING
 // clang-format on
 
 #ifndef _STL_RESTORE_DEPRECATED_WARNING
 #ifdef __clang__
 #define _STL_RESTORE_DEPRECATED_WARNING _Pragma("clang diagnostic pop")
-#else // __clang__
+#elif defined(__EDG__) || defined(__CUDACC__) || defined(__INTEL_COMPILER) // TRANSITION, VSO-1329304
 #define _STL_RESTORE_DEPRECATED_WARNING __pragma(warning(pop))
-#endif // __clang__
+#else // vvv MSVC vvv
+#define _STL_RESTORE_DEPRECATED_WARNING _Pragma("warning(pop)")
+#endif // ^^^ MSVC ^^^
 #endif // _STL_RESTORE_DEPRECATED_WARNING
 
 #define _CPPLIB_VER       650
 #define _MSVC_STL_VERSION 142
-#define _MSVC_STL_UPDATE  202102L
+#define _MSVC_STL_UPDATE  202106L
 
 #ifndef _ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
 #ifdef __CUDACC__
@@ -530,8 +570,8 @@
 #error STL1000: Unexpected compiler version, expected Clang 11.0.0 or newer.
 #endif // ^^^ old Clang ^^^
 #elif defined(_MSC_VER)
-#if _MSC_VER < 1928 // Coarse-grained, not inspecting _MSC_FULL_VER
-#error STL1001: Unexpected compiler version, expected MSVC 19.28 or newer.
+#if _MSC_VER < 1929 // Coarse-grained, not inspecting _MSC_FULL_VER
+#error STL1001: Unexpected compiler version, expected MSVC 19.29 or newer.
 #endif // ^^^ old MSVC ^^^
 #else // vvv other compilers vvv
 // not attempting to detect other compilers
@@ -1085,6 +1125,16 @@
 #define _HAS_STREAM_INSERTION_OPERATORS_DELETED_IN_CXX20 (_HAS_FEATURES_REMOVED_IN_CXX20)
 #endif // _HAS_STREAM_INSERTION_OPERATORS_DELETED_IN_CXX20
 
+
+#ifndef _HAS_FEATURES_REMOVED_IN_CXX23
+#define _HAS_FEATURES_REMOVED_IN_CXX23 (!_HAS_CXX23)
+#endif // _HAS_FEATURES_REMOVED_IN_CXX23
+
+// P2186R2 Removing Garbage Collection Support
+#ifndef _HAS_GARBAGE_COLLECTION_SUPPORT_DELETED_IN_CXX23
+#define _HAS_GARBAGE_COLLECTION_SUPPORT_DELETED_IN_CXX23 (_HAS_FEATURES_REMOVED_IN_CXX23)
+#endif // _HAS_GARBAGE_COLLECTION_SUPPORT_DELETED_IN_CXX23
+
 // LIBRARY FEATURE-TEST MACROS
 
 // C++14
@@ -1161,13 +1211,7 @@
 #define __cpp_lib_shared_ptr_weak_type  201606L
 #define __cpp_lib_string_view           201803L
 #define __cpp_lib_to_chars              201611L
-#define __cpp_lib_variant               201606L
-#endif // _HAS_CXX17
-
-#if _HAS_CXX17
-#define __cpp_lib_chrono 201611L // P0505R0 constexpr For <chrono> (Again)
-#else // _HAS_CXX17
-#define __cpp_lib_chrono 201510L // P0092R1 <chrono> floor(), ceil(), round(), abs()
+#define __cpp_lib_variant               202102L
 #endif // _HAS_CXX17
 
 // C++20
@@ -1219,13 +1263,14 @@
 #define __cpp_lib_constexpr_vector 201907L
 #endif // defined(__cpp_constexpr_dynamic_alloc) && !defined(__clang__)
 
-#ifdef __cpp_impl_coroutine // TRANSITION, Clang coroutine support
-#define __cpp_lib_coroutine 201902L
-#endif // __cpp_impl_coroutine
+#define __cpp_lib_destroying_delete 201806L
+#define __cpp_lib_endian            201907L
+#define __cpp_lib_erase_if          202002L
 
-#define __cpp_lib_destroying_delete            201806L
-#define __cpp_lib_endian                       201907L
-#define __cpp_lib_erase_if                     202002L
+#if _HAS_CXX23 && defined(__cpp_lib_concepts) // TRANSITION, GH-395 and GH-1814
+#define __cpp_lib_format 201907L
+#endif // _HAS_CXX23 && defined(__cpp_lib_concepts)
+
 #define __cpp_lib_generic_unordered_lookup     201811L
 #define __cpp_lib_int_pow2                     202002L
 #define __cpp_lib_integer_comparison_functions 202002L
@@ -1251,14 +1296,24 @@
 #define __cpp_lib_list_remove_return_type 201806L
 #define __cpp_lib_math_constants          201907L
 #define __cpp_lib_polymorphic_allocator   201902L
+
+#if _HAS_CXX23 && defined(__cpp_lib_concepts) // TRANSITION, GH-395 and GH-1814
+#define __cpp_lib_ranges 202106L
+#endif // _HAS_CXX23 && defined(__cpp_lib_concepts)
+
 #define __cpp_lib_remove_cvref            201711L
 #define __cpp_lib_semaphore               201907L
 #define __cpp_lib_shift                   201806L
 #define __cpp_lib_smart_ptr_for_overwrite 202002L
-#define __cpp_lib_span                    202002L
-#define __cpp_lib_ssize                   201902L
-#define __cpp_lib_starts_ends_with        201711L
-#define __cpp_lib_syncbuf                 201803L
+
+#ifdef __cpp_consteval
+#define __cpp_lib_source_location 201907L
+#endif // __cpp_consteval
+
+#define __cpp_lib_span             202002L
+#define __cpp_lib_ssize            201902L
+#define __cpp_lib_starts_ends_with 201711L
+#define __cpp_lib_syncbuf          201803L
 
 #ifdef __cpp_lib_concepts // TRANSITION, GH-395
 #define __cpp_lib_three_way_comparison 201907L
@@ -1284,11 +1339,30 @@
 #define __cpp_lib_array_constexpr 201803L
 #endif // _HAS_CXX17
 
+#if _HAS_CXX20 && defined(__cpp_lib_concepts) // TRANSITION, GH-395
+#define __cpp_lib_chrono 201907L // P1466R3 Miscellaneous Minor Fixes For <chrono>
+#elif _HAS_CXX17
+#define __cpp_lib_chrono 201611L // P0505R0 constexpr For <chrono> (Again)
+#else // _HAS_CXX17
+#define __cpp_lib_chrono 201510L // P0092R1 <chrono> floor(), ceil(), round(), abs()
+#endif // _HAS_CXX17
+
 #if _HAS_CXX20
 #define __cpp_lib_shared_ptr_arrays 201707L // P0674R1 make_shared() For Arrays
 #else // _HAS_CXX20
 #define __cpp_lib_shared_ptr_arrays 201611L // P0497R0 Fixing shared_ptr For Arrays
 #endif // _HAS_CXX20
+
+#if defined(__cpp_impl_coroutine) || defined(_DOWNLEVEL_COROUTINES_SUPPORTED) // TRANSITION, Clang coroutine support
+#define __cpp_lib_coroutine 201902L
+#endif // __cpp_impl_coroutine
+
+// C++23
+#if _HAS_CXX23
+#define __cpp_lib_is_scoped_enum  202011L
+#define __cpp_lib_string_contains 202011L
+#define __cpp_lib_to_underlying   202102L
+#endif // _HAS_CXX23
 
 // EXPERIMENTAL
 #define __cpp_lib_experimental_erase_if   201411L
